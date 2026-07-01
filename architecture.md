@@ -4,7 +4,9 @@
 
 Technical foundation for LyraLearn: a music-based language learning platform that separates a song into stems, transcribes and translates the lyrics, and extracts melody/pitch data for an interactive, word-synced learning player.
 
-This version (v3) goes deeper than a component list — actual API contracts, state machine definitions, schemas with types and indexes, IAM scoping, and the specific algorithm choices (e.g. SM-2 for spaced repetition) needed to actually start building each piece. 14 technologies integrated: AWS, Python, PyTorch, React, JavaScript, TensorFlow, Rust, Go, Java/Spring Boot, C++, Kubernetes, DynamoDB, MongoDB, PostgreSQL.
+**v4 note — this is the deployment stack.** Fully serverless: Lambda for every backend service, DynamoDB for job state/song metadata/vocab/spaced-repetition, MongoDB Atlas (free tier) for lyrics/translation/timing. No EKS, no RDS, no VPC, no NAT Gateway — nothing here has a fixed monthly cost independent of usage. At Tier A scale (30-50 users, 20-30 songs/month), this runs at roughly **$6-10/month**.
+
+13 technologies are live in this version: AWS, Python, PyTorch, React, JavaScript, TensorFlow, Rust, Go, Java, C++, DynamoDB, MongoDB.
 
 ---
 
@@ -14,11 +16,11 @@ This version (v3) goes deeper than a component list — actual API contracts, st
 2. `POST /songs` — client requests a pre-signed S3 upload URL
 3. Client `PUT`s the audio file directly to S3
 4. `POST /songs/{songId}/process` — triggers Rust validation Lambda, then Step Functions execution
-5. Client subscribes to job status: either polls `GET /jobs/{jobId}` or opens a WebSocket to the Go service
+5. Client subscribes to job status via API Gateway WebSocket API (Go Lambda backing it), with polling `GET /jobs/{jobId}` as fallback
 6. On `COMPLETE`, client fetches `GET /songs/{songId}/lyrics` (MongoDB-backed) and `GET /songs/{songId}/audio-urls` (pre-signed playback URLs), renders the player
-7. During/after playback, vocab events are POSTed to the Java learning service, which schedules future reviews
+7. During/after playback, vocab events are POSTed to the learning API (Java Lambda), which schedules future reviews in DynamoDB
 
-Latency budget that shapes the design: step 4-6 is 3-6 minutes end to end (GPU-bound), everything else is sub-second. This is why steps 4-6 are fully async and decoupled from the request/response cycle.
+Latency budget unchanged from v3: step 4-6 is 3-6 minutes end to end (GPU-bound), everything else is sub-second, so steps 4-6 stay fully async and decoupled from the request/response cycle.
 
 ---
 
@@ -31,9 +33,9 @@ Browser (React + TS, TensorFlow.js for pitch matching, Web Audio API for playbac
 CloudFront + S3 (static hosting, cache-control: immutable on hashed build assets)
       |
       v
-API Gateway (HTTP API, JWT authorizer against Cognito User Pool)
+API Gateway (HTTP API + WebSocket API, JWT authorizer against Cognito User Pool)
       |
-      +--> Rust Lambda (upload validation: ffprobe-style header check, format/size limits)
+      +--> Rust Lambda (upload validation: header check, format/size limits)
       |         |
       |         v
       |    Step Functions (STANDARD workflow — need full history/audit trail, not EXPRESS)
@@ -45,20 +47,22 @@ API Gateway (HTTP API, JWT authorizer against Cognito User Pool)
       |         |                                    |
       |         +---- C++ DSP core (pybind11 .so, baked into the Basic Pitch container)
       |
-      +--> EKS (2 node groups: general + none needed for GPU here, GPU stays in SageMaker)
-                Go deployment  — WebSocket hub, subscribes to DynamoDB Streams
-                Java deployment — Spring Boot, learning service, talks to RDS PostgreSQL
+      +--> Go Lambda  — WebSocket $connect/$disconnect/push, triggered by DynamoDB Streams
+      +--> Java Lambda — learning service: SM-2 scheduling, quiz generation
 
 Data layer:
   S3 (audio/stems, versioned, SSE-S3)
-  DynamoDB (job state, song metadata — on-demand capacity mode)
-  DocumentDB or MongoDB Atlas (lyrics/translation/timing, one doc per song)
-  RDS PostgreSQL (vocab, spaced-repetition state, Multi-AZ off for dev, on for prod)
+  DynamoDB (job state, song metadata, vocab/spaced-repetition state, WebSocket connections — on-demand capacity)
+  MongoDB Atlas (M0 free tier — lyrics/translation/timing, one doc per song)
 ```
+
+**No VPC required.** Every compute component here — API Gateway, Lambda (Python/Rust/Go/Java), SageMaker Processing Jobs, DynamoDB, MongoDB Atlas — reaches what it needs over the public AWS/internet endpoints without needing private subnet placement. This is what falls out of dropping RDS: RDS was the one component in v3 that required VPC placement, and needing to reach it was the reason a NAT Gateway existed for the EKS nodes. With RDS gone, there's nothing left that needs a VPC, so there's no NAT Gateway or Interface Endpoint cost at all.
 
 ---
 
 ## 4. Orchestration: Step Functions state machine (ASL sketch)
+
+Unchanged from v3 — this part of the pipeline was never EKS or RDS dependent.
 
 ```json
 {
@@ -104,20 +108,18 @@ Data layer:
 }
 ```
 
-Notes:
-- `.sync` suffix on the SageMaker integration blocks the state machine until the job finishes — no manual polling logic needed.
-- STANDARD (not EXPRESS) workflow type: you get up to a year of execution history in the console, which matters for debugging a 4-stage GPU pipeline where something *will* fail intermittently (OOM on a long song, malformed audio, etc).
-- Each `MarkFailed`/`MarkComplete` write is what the Go service's DynamoDB Streams subscription picks up to push to the client.
+Each `MarkFailed`/`MarkComplete` write is what the Go Lambda's DynamoDB Streams trigger picks up to push to the connected client (Section 5.6).
 
 ---
 
 ## 5. Component breakdown
 
 ### 5.1 Frontend
+Unchanged from v3.
 - React + TypeScript, Vite build, deployed as a versioned/hashed bundle to S3 behind CloudFront
-- Data fetching: React Query (TanStack Query) for `GET /jobs/{jobId}` polling with exponential backoff (start at 2s, cap at 15s) as the fallback path when WebSocket isn't connected
-- Playback sync: Web Audio API `AudioContext.currentTime`, sampled on a `requestAnimationFrame` loop, binary-searched against the sorted word-timing array from MongoDB to find the active word — this is cheaper than a `setInterval` re-render loop and stays in sync with actual audio playback rather than wall-clock time
-- **TensorFlow.js**: CREPE model (from Magenta) loaded via `@tensorflow-models`, run against `getUserMedia` mic input in a Web Worker so pitch inference doesn't block the main thread during playback
+- React Query for `GET /jobs/{jobId}` polling (exponential backoff, 2s → 15s cap) as the fallback path when the WebSocket connection drops
+- Web Audio API `AudioContext.currentTime`, sampled on `requestAnimationFrame`, binary-searched against the MongoDB word-timing array
+- **TensorFlow.js**: CREPE model for in-browser pitch matching, run in a Web Worker against `getUserMedia` mic input
 
 ### 5.2 API layer — endpoint contract
 
@@ -128,15 +130,15 @@ Notes:
 | GET | `/jobs/{id}` | Cognito JWT | Python Lambda | reads DynamoDB, returns status enum |
 | GET | `/songs/{id}/lyrics` | Cognito JWT | Python Lambda | proxies MongoDB doc |
 | GET | `/songs/{id}/audio-urls` | Cognito JWT | Python Lambda | pre-signed GET URLs, 15 min TTL |
-| WS | `/ws` | Cognito JWT (query param at connect) | Go service (ALB → EKS) | job-status push |
-| POST | `/vocab/review` | Cognito JWT | Java service (separate ALB → EKS) | records a review event, returns next-due date |
-| GET | `/vocab/due` | Cognito JWT | Java service | vocab items due today, SM-2 scheduled |
+| WS | `$connect` / `$disconnect` / `$default` | Cognito JWT (query param at connect) | Go Lambda | connection lifecycle + job-status push |
+| POST | `/vocab/review` | Cognito JWT | Java Lambda | records a review event, returns next-due date |
+| GET | `/vocab/due` | Cognito JWT | Java Lambda | vocab items due today, SM-2 scheduled, queried from DynamoDB |
 
-Two ALBs (or one ALB with path-based routing) split traffic between the API Gateway/Lambda surface and the EKS-hosted services — API Gateway does not natively proxy to EKS pods without a VPC Link, so `/vocab/*` and `/ws` route through a separate ALB Ingress directly.
+Everything now sits behind API Gateway directly — HTTP API for REST-style routes, WebSocket API for `/ws`. No ALB, no VPC Link, no separate ingress path: this is the piece that got structurally simpler by dropping EKS, not just cheaper.
 
 ### 5.3 ML processing — container and pybind11 detail
+Unchanged from v3 — SageMaker Processing Jobs were never part of the EKS/RDS cost problem.
 
-Each SageMaker Processing Job container follows the same shape:
 ```dockerfile
 FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
 COPY dsp_core/ /opt/dsp_core/
@@ -145,7 +147,6 @@ COPY process.py /opt/ml/code/process.py
 ENTRYPOINT ["python", "/opt/ml/code/process.py"]
 ```
 
-C++ DSP core exposed via pybind11 — the Python side calls it like a normal module:
 ```cpp
 // dsp_core/beat_detect.cpp
 #include <pybind11/pybind11.h>
@@ -163,30 +164,22 @@ PYBIND11_MODULE(dsp_core, m) {
 import dsp_core
 beats = dsp_core.detect_beats(audio_samples, sample_rate)  # calls into compiled C++
 ```
-Instance sizing: `ml.g4dn.xlarge` (1x T4 GPU, 4 vCPU, 16GB) is the starting point for Demucs/Whisper; Basic Pitch is lighter and could run on a smaller/CPU instance if cost matters more than pipeline latency — worth benchmarking both once the pipeline is live.
+`ml.g4dn.xlarge` remains the starting instance for Demucs/Whisper; Basic Pitch stays a candidate for a smaller/CPU instance if per-song cost matters more than latency.
 
 ### 5.4 Storage — access patterns and IAM
 
-**S3** — bucket layout `songs/{songId}/{raw|stems|pitch}/...`, SSE-S3 encryption, lifecycle rule to transition `raw/` to Infrequent Access after 30 days (stems/pitch stay Standard since they're read on every playback). IAM policy for the SageMaker execution role is scoped to `arn:aws:s3:::lyralearn-audio/songs/*` only — never bucket-wide.
+**S3** — unchanged: `songs/{songId}/{raw|stems|pitch}/...`, SSE-S3, lifecycle rule to IA after 30 days on `raw/`. SageMaker execution role scoped to `arn:aws:s3:::lyralearn-audio/songs/*`.
 
-**DynamoDB** — GSI needed: `GSI1PK = userId, GSI1SK = createdAt` to support "list a user's songs sorted by upload date" without a table scan. Base table access is single-item `GetItem`/`UpdateItem` by `PK`/`SK`, which stays cheap under on-demand billing at this scale.
+**DynamoDB** — now the single relational-adjacent store for everything except lyrics. GSIs needed:
+- `GSI1PK = userId, GSI1SK = createdAt` — "my songs, newest first"
+- `GSI2PK = userId, GSI2SK = nextReviewAt` — "vocab due today for this user" (replaces the PostgreSQL index from v3)
 
-**MongoDB** — index on `songId` (unique), and a compound index if you ever need "find all songs containing vocab word X" (`lines.words.text`). Start with just the unique index; add the text index only if that query pattern actually shows up.
+**MongoDB** — unchanged: unique index on `songId`, add a compound index on `lines.words.text` only if a "find songs containing vocab word X" query pattern actually shows up.
 
-**PostgreSQL** — see 5.6 for DDL. Index on `user_vocab_progress(user_id, next_review_at)` since "vocab due today for this user" is the hottest query in the learning service.
+### 5.5 Learning service — Java on Lambda, spaced repetition
 
-### 5.5 Learning service — Java + Spring Boot, spaced repetition
+Same SM-2 algorithm and package structure as v3, repackaged as a Lambda-backed API instead of a Spring Boot service on EKS. Plain Java Lambda (or Spring Cloud Function if you want to keep Spring idioms and accept the larger cold start) both work here — plain Java Lambda is the leaner choice at this traffic volume.
 
-Package structure:
-```
-com.lyralearn.learning
-  controller/  VocabController.java, ReviewController.java
-  service/     SpacedRepetitionService.java, QuizGenerationService.java
-  repository/  VocabItemRepository.java (Spring Data JPA)
-  model/       VocabItem.java, UserVocabProgress.java, ReviewHistory.java
-```
-
-Scheduling algorithm: **SM-2** (the SuperMemo-2 algorithm, same one Anki uses) — well-understood, simple to implement correctly, and appropriate for vocab review rather than something more elaborate:
 ```java
 public class SpacedRepetitionService {
   public UserVocabProgress schedule(UserVocabProgress p, int quality /* 0-5 */) {
@@ -207,59 +200,45 @@ public class SpacedRepetitionService {
   }
 }
 ```
-`POST /vocab/review` takes a `quality` score (0-5, self-assessed or derived from quiz correctness), runs it through this function, writes the updated row, returns the new `nextReviewAt`.
 
-### 5.6 Notification service — Go, WebSocket hub pattern
+Persistence swap from v3: instead of a JPA repository writing to `user_vocab_progress`, the Lambda handler calls `DynamoDbClient.updateItem` on `USER#{userId} / VOCAB#{vocabItemId}`, with `easeFactor`, `intervalDays`, `repetitions`, `nextReviewAt` as item attributes. `GET /vocab/due` becomes a `Query` against `GSI2` (`userId` + `nextReviewAt <= now`) instead of the SQL index from v3 — same access pattern, different store.
 
-Standard fan-out hub, one goroutine per connection plus a central broadcast loop:
+### 5.6 Notification — Go on Lambda, API Gateway WebSocket API
+
+The in-memory hub pattern from v3 doesn't map to Lambda — Lambda invocations are stateless and short-lived, so there's no persistent `clients` map to hold. The AWS-standard serverless WebSocket pattern replaces it: connection identity is persisted, not held in memory.
+
 ```go
-type Hub struct {
-    clients    map[string]*Client // keyed by userId
-    broadcast  chan JobUpdate
-    register   chan *Client
-    unregister chan *Client
+// Connect handler — invoked on $connect
+func handleConnect(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
+    userId := extractUserIdFromJWT(req.QueryStringParameters["token"])
+    _, err := dynamoClient.PutItem(ctx, &dynamodb.PutItemInput{
+        TableName: aws.String("WebSocketConnections"),
+        Item: map[string]types.AttributeValue{
+            "connectionId": &types.AttributeValueMemberS{Value: req.RequestContext.ConnectionID},
+            "userId":       &types.AttributeValueMemberS{Value: userId},
+        },
+    })
+    return events.APIGatewayProxyResponse{StatusCode: 200}, err
 }
 
-func (h *Hub) run() {
-    for {
-        select {
-        case c := <-h.register:
-            h.clients[c.userId] = c
-        case c := <-h.unregister:
-            delete(h.clients, c.userId)
-            close(c.send)
-        case update := <-h.broadcast:
-            if c, ok := h.clients[update.UserID]; ok {
-                c.send <- update
-            }
+// Push handler — invoked by a DynamoDB Streams trigger on Job item MODIFY events
+func handleJobUpdate(ctx context.Context, event events.DynamoDBEvent) error {
+    for _, record := range event.Records {
+        if record.EventName != "MODIFY" {
+            continue
         }
+        userId := extractUserIdFromKey(record.Change.NewImage)
+        connectionId := lookupConnectionId(ctx, userId) // query WebSocketConnections table
+        apiGwClient.PostToConnection(ctx, &apigatewaymanagementapi.PostToConnectionInput{
+            ConnectionId: aws.String(connectionId),
+            Data:         marshalJobUpdate(record.Change.NewImage),
+        })
     }
+    return nil
 }
 ```
-`update`s arrive from a separate goroutine consuming a DynamoDB Streams Kinesis adapter (`aws-sdk-go` `dynamodbstreams` package), filtered to `MODIFY` events on `Job` items, mapped to the owning `userId` via the item's `PK`. Each client connection gets its own read/write goroutine pair; the hub's central loop is the only place that touches the `clients` map, avoiding lock contention.
 
-### 5.7 Kubernetes (EKS)
-
-Two Deployments, one per service, each behind its own Service + Ingress path:
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: go-notification-service
-spec:
-  replicas: 2
-  template:
-    spec:
-      containers:
-        - name: notification-service
-          image: <ecr>/lyralearn-notify:latest
-          resources:
-            requests: { cpu: "100m", memory: "64Mi" }
-            limits:   { cpu: "500m", memory: "256Mi" }
-          readinessProbe:
-            httpGet: { path: /healthz, port: 8080 }
-```
-`replicas: 2` minimum for the Go service specifically, since it holds long-lived WebSocket connections — losing the single pod would drop every open connection at once. HorizontalPodAutoscaler on both deployments targeting 70% CPU, with the Go service additionally worth watching on connection count (custom metric via Prometheus adapter) rather than CPU alone, since idle WebSocket connections are cheap on CPU but still consume memory/file descriptors.
+Three small Go Lambda functions (`$connect`, `$disconnect`, and the DynamoDB Streams-triggered push handler) replace the single always-on Fargate/EKS hub. `WebSocketConnections` is a small DynamoDB table (`connectionId` as key, `userId` as an attribute with a GSI for the reverse lookup). This is the standard pattern AWS documents for serverless WebSocket APIs — Go's concurrency strengths aren't being used here anymore, since there's no long-lived process holding connections open; the tradeoff is explicit and worth naming rather than glossing over.
 
 ---
 
@@ -272,11 +251,18 @@ PK (S) | SK (S) | attributes
 USER#{userId}  | PROFILE           | name, email, nativeLang, targetLangs
 SONG#{songId}  | METADATA          | title, artist, uploadedBy, status
 SONG#{songId}  | JOB#{jobId}       | stage, status, stageOutputs (map of S3 keys)
+USER#{userId}  | VOCAB#{vocabId}   | term, definition, easeFactor, intervalDays, repetitions, nextReviewAt, lastReviewedAt
 
-GSI1: GSI1PK=USER#{userId}, GSI1SK=createdAt   -- "my songs, newest first"
+GSI1: GSI1PK=USER#{userId}, GSI1SK=createdAt      -- "my songs, newest first"
+GSI2: GSI2PK=USER#{userId}, GSI2SK=nextReviewAt   -- "vocab due today"
+
+Table: WebSocketConnections   (on-demand capacity)
+PK: connectionId (S)
+attributes: userId
+GSI: GSI1PK=userId   -- reverse lookup for push
 ```
 
-### 6.2 MongoDB
+### 6.2 MongoDB — unchanged from v3
 ```json
 // db.songLyrics, unique index on songId
 {
@@ -291,43 +277,6 @@ GSI1: GSI1PK=USER#{userId}, GSI1SK=createdAt   -- "my songs, newest first"
 }
 ```
 
-### 6.3 PostgreSQL
-```sql
-CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  dynamo_user_id TEXT UNIQUE NOT NULL,
-  native_language TEXT NOT NULL
-);
-
-CREATE TABLE vocab_items (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  term TEXT NOT NULL,
-  target_language TEXT NOT NULL,
-  definition TEXT,
-  source_song_id TEXT NOT NULL
-);
-
-CREATE TABLE user_vocab_progress (
-  user_id UUID REFERENCES users(id),
-  vocab_item_id UUID REFERENCES vocab_items(id),
-  ease_factor NUMERIC(3,2) NOT NULL DEFAULT 2.5,
-  interval_days INT NOT NULL DEFAULT 0,
-  repetitions INT NOT NULL DEFAULT 0,
-  next_review_at TIMESTAMPTZ NOT NULL,
-  last_reviewed_at TIMESTAMPTZ,
-  PRIMARY KEY (user_id, vocab_item_id)
-);
-CREATE INDEX idx_due_reviews ON user_vocab_progress (user_id, next_review_at);
-
-CREATE TABLE review_history (
-  id BIGSERIAL PRIMARY KEY,
-  user_id UUID REFERENCES users(id),
-  vocab_item_id UUID REFERENCES vocab_items(id),
-  reviewed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  quality SMALLINT NOT NULL CHECK (quality BETWEEN 0 AND 5)
-);
-```
-
 ---
 
 ## 7. Infrastructure as code (Terraform layout)
@@ -335,83 +284,89 @@ CREATE TABLE review_history (
 ```
 terraform/
   modules/
-    frontend/     # S3 + CloudFront, OAC (not legacy OAI)
-    api/           # API Gateway HTTP API + Lambda (Python, Rust) + Cognito User Pool
-    orchestration/ # Step Functions state machine (from templatefile()) + IAM roles
-    ml-processing/  # ECR repos, SageMaker Processing Job IAM role
-    eks/            # EKS cluster, managed node group, IRSA roles for Go/Java pods
-    storage/        # S3 buckets, DynamoDB table + GSI, RDS PostgreSQL, MongoDB Atlas provider
+    frontend/       # S3 + CloudFront, OAC
+    api/             # API Gateway HTTP API + WebSocket API + Lambda (Python, Rust, Go, Java) + Cognito
+    orchestration/    # Step Functions state machine + IAM roles
+    ml-processing/     # ECR repos, SageMaker Processing Job IAM role
+    storage/           # S3 buckets, DynamoDB tables + GSIs, MongoDB Atlas provider
   environments/
-    dev/  (single-AZ RDS, on-demand DynamoDB, smaller node group)
-    prod/ (Multi-AZ RDS, autoscaling node group)
+    dev/
+    prod/
 ```
-Use IRSA (IAM Roles for Service Accounts) for the Go and Java pods rather than node-level IAM roles — scopes DynamoDB Streams read access to the Go service specifically and RDS/Secrets Manager access to the Java service specifically, without either pod inheriting the other's permissions.
+
+No `eks/` module, no VPC module beyond the default. This is meaningfully less Terraform than v3 — one less major module, no IRSA roles, no ALB/Ingress configuration. IAM roles stay scoped per-Lambda-function, same principle as v3's per-service scoping.
 
 ---
 
-## 8. Cost considerations
+## 8. Cost — MVP live deployment (Tier A: 30-50 users, 20-30 songs/month)
 
-| Component | Cost driver | Mitigation |
+| Component | Monthly cost | Notes |
 |---|---|---|
-| SageMaker Processing Jobs | per-second GPU billing, ~3-5 min/song | small fixed test-song set during dev, not re-processing on every commit |
-| RDS PostgreSQL | always-on instance | `db.t4g.micro` for dev, Multi-AZ only in prod |
-| EKS | control plane ($0.10/hr) + node group | 2 small nodes (`t4g.medium`) is enough for 2 low-traffic deployments at prototype stage |
-| DynamoDB | on-demand read/write | negligible at this scale; switch to provisioned + autoscaling only if traffic becomes predictable |
-| MongoDB Atlas | managed cluster tier | M0 (free tier) is sufficient through most of development |
-| CloudFront + S3 | egress on audio playback | cache stems aggressively (`Cache-Control: max-age=31536000` — content-addressed by songId, effectively immutable) |
+| EKS control plane + nodes | $0 | removed |
+| NAT Gateway / VPC Endpoints | $0 | nothing left requires VPC placement |
+| RDS PostgreSQL | $0 | removed, vocab state moved to DynamoDB |
+| Lambda (Python, Rust, Go, Java — all functions) | ~$0-2 | comfortably within the always-free tier at this volume |
+| API Gateway (HTTP + WebSocket) | ~$1 | |
+| DynamoDB on-demand | ~$1 | job state, song metadata, vocab, WS connections |
+| MongoDB Atlas (M0) | $0 | free tier, ample headroom at this scale |
+| SageMaker Processing (20-30 songs/month) | ~$2-3 | ~$0.10/song |
+| S3 + CloudFront | ~$1-2 | |
+| Cognito | $0 | free under 50,000 MAU |
+| Route 53 hosted zone | ~$0.50 | |
+| **Total** | **~$6-10/month** | |
+
+Watch MongoDB Atlas storage/connection metrics as the one thing that can jump this number — M0 → M10 is a step to ~$57/month on its own, independent of everything else here.
 
 ---
 
 ## 9. Security considerations
 
-- Cognito User Pool as the single identity source; API Gateway JWT authorizer, and Go/Java services validate the same JWT via the pool's JWKS endpoint (no shared secret, no duplicated auth logic)
+- Cognito User Pool as the single identity source; API Gateway JWT authorizer on HTTP routes, and the Go WebSocket connect handler validates the same JWT at `$connect` time
 - Pre-signed S3 URLs: upload PUT (5 min TTL, content-type restricted), playback GET (15 min TTL)
-- VPC design: SageMaker Processing Jobs and RDS in private subnets with no direct internet route; EKS nodes in private subnets behind a NAT gateway; only the ALBs and CloudFront sit in/behind public-facing infrastructure
-- Secrets (RDS credentials, MongoDB connection string) in AWS Secrets Manager, mounted into EKS pods via the Secrets Store CSI Driver rather than plain Kubernetes Secrets
-- IAM roles scoped per-function/per-service (see 7) — no wildcard `s3:*`/`dynamodb:*`, no shared execution role across stages
+- No VPC needed at this tier — every component talks over public AWS/internet endpoints with IAM/JWT-based auth rather than network isolation. This is an acceptable, deliberate tradeoff at this scale, where the attack surface is small and every credential is scoped tightly per-function
+- Secrets (MongoDB Atlas connection string) in AWS Secrets Manager, read directly by Lambda at cold start (cached in execution environment across warm invocations) rather than injected via any container-orchestration secret-mounting mechanism
+- IAM roles scoped per-Lambda-function — no wildcard `s3:*`/`dynamodb:*`, no shared execution role across functions
 
 ---
 
 ## 10. Phased build plan
 
-**Phase 1** — plain Python script, no AWS: Demucs → Whisper → Helsinki-NLP → Basic Pitch on one local file. Validate before building infrastructure.
+**Phase 1** — plain Python script, no AWS: Demucs → Whisper → Helsinki-NLP → Basic Pitch on one local file.
 
-**Phase 2** — containerize, push to ECR, wire up SageMaker Processing Jobs + the Step Functions ASL from section 4. Trigger manually, no API yet.
+**Phase 2** — containerize, push to ECR, wire up SageMaker Processing Jobs + the Step Functions ASL from Section 4.
 
-**Phase 3** — API Gateway + Python/Rust Lambda, Cognito, DynamoDB table + GSI live. Submit and poll via Postman.
+**Phase 3** — API Gateway (HTTP) + Python/Rust Lambda, Cognito, DynamoDB table + GSIs live.
 
 **Phase 4** — React frontend: upload, polling UI, MongoDB-backed player with Web Audio sync.
 
-**Phase 5** — Java/Spring Boot learning service on EKS + RDS PostgreSQL, SM-2 scheduling, `/vocab/review` and `/vocab/due` endpoints.
+**Phase 5** — Java Lambda learning service: SM-2 scheduling against DynamoDB, `/vocab/review` and `/vocab/due` endpoints.
 
-**Phase 6** — Go notification service on EKS (DynamoDB Streams → WebSocket), TensorFlow.js pitch matching, C++ DSP core if Basic Pitch's stock tempo detection proves insufficient.
+**Phase 6** — Go Lambda notification stack: API Gateway WebSocket API, `WebSocketConnections` table, DynamoDB Streams trigger. TensorFlow.js pitch matching in the client. C++ DSP core if Basic Pitch's stock tempo detection proves insufficient.
 
 ---
 
 ## 11. Open decisions
 
 - Translation granularity: line-by-line vs phrase-level
-- Whisper `large-v3` vs `medium` — benchmark accuracy/latency/cost on real songs before committing
-- WebSocket vs polling — ship polling first (Phase 3), add Go service only once polling UX genuinely suffers
-- MongoDB Atlas vs DocumentDB — Atlas first for speed, DocumentDB later if unified AWS billing/IAM matters more
-- Build the C++ DSP core only if Basic Pitch's output shows a measurable gap — don't build it speculatively
+- Whisper `large-v3` vs `medium` — benchmark before committing
+- MongoDB Atlas vs DocumentDB — Atlas first for speed and the free tier; DocumentDB only becomes worth revisiting if this ever moves back inside a VPC for other reasons
+- Build the C++ DSP core only if Basic Pitch's output shows a measurable gap
+- **New**: plain Java Lambda vs Spring Cloud Function for the learning service — plain Lambda is the leaner, cheaper choice at this scale
 
 ---
 
-## 12. Technology-to-purpose summary
+## 12. Technology-to-purpose summary (MVP tier)
 
 | Technology | Where | Why |
 |---|---|---|
-| AWS | Everywhere | Lambda, API Gateway, SageMaker, S3, DynamoDB, EKS, Cognito, RDS, Terraform |
+| AWS | Everywhere | Lambda, API Gateway (HTTP + WebSocket), SageMaker, S3, DynamoDB, Cognito, Terraform |
 | Python | ML pipeline, core Lambda | Demucs/Whisper/Helsinki-NLP/Basic Pitch runtime |
 | PyTorch | ML pipeline | Underlying framework for the 3 GPU stages |
 | React + JS | Frontend | SPA, Web Audio sync, React Query polling |
 | TensorFlow.js | Client | In-browser CREPE pitch matching |
 | Rust | Upload-validation Lambda | Low cold-start on the hot path |
-| Go | EKS notification service | Goroutine concurrency for many WebSocket connections |
-| Java + Spring Boot | EKS learning service | SM-2 scheduling, relational domain logic |
+| Go | WebSocket Lambda functions | `$connect`/`$disconnect`/push handlers, DynamoDB Streams trigger |
+| Java | Learning service Lambda | SM-2 scheduling logic |
 | C++ | DSP core via pybind11 | Performance-critical beat/tempo detection |
-| Kubernetes (EKS) | Hosts Go + Java | Always-on workloads, IRSA-scoped permissions |
-| DynamoDB | Job state, song metadata | Key-value lookups, GSI for "my songs" |
+| DynamoDB | Job state, song metadata, vocab, WS connections | Single store for everything except lyrics |
 | MongoDB | Lyrics/translation/timing | Nested document shape matches Whisper output |
-| PostgreSQL | Vocab, spaced repetition | Relational: users × vocab × review history |
