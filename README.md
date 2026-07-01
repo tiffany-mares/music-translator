@@ -8,8 +8,8 @@ Pre-implementation. The design is complete (see below); no application code has 
 
 ## How it works
 
-1. Upload audio, which is split into stems (Demucs), transcribed (Whisper), translated (Helsinki-NLP), and analyzed for pitch/beat (Basic Pitch + a C++ DSP core) via an async GPU pipeline.
-2. Once processing completes, the player synchronizes translated lyrics to playback word-by-word using the Web Audio API.
+1. Upload audio. If it's a song LyraLearn has already processed (matched by acoustic fingerprint, even at a different bitrate), the player is ready almost instantly. Otherwise, the song is split into overlapping chunks and processed in parallel: separated into stems (Demucs), transcribed (faster-whisper), and analyzed for pitch/beat (Basic Pitch + a C++ DSP core), then translated — a new song takes roughly 70-110 seconds end to end.
+2. Playback starts immediately once the upload is validated — it doesn't wait on the pipeline. Lyrics, translation, and pitch data hydrate into the player progressively as they become available, and once they land the player synchronizes translated lyrics to playback word-by-word using the Web Audio API.
 3. Vocabulary encountered during playback is scheduled for review using the SM-2 spaced-repetition algorithm (the same one Anki uses).
 
 ## Documentation
