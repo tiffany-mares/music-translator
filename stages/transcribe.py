@@ -3,6 +3,14 @@
 Produces the line/word structure the MongoDB songLyrics document expects
 (architecture.md section 6.2) so later phases consume it without reshaping.
 """
+import os
+
+# torch and ctranslate2 each bundle their own OpenMP runtime on Windows;
+# loading both in one process aborts with OMP Error #15 unless this is set.
+# Standard workaround for the torch+ctranslate2 pairing; revisit if either
+# dependency unbundles its OpenMP copy.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
 from faster_whisper import WhisperModel
 
 
