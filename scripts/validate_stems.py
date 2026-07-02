@@ -11,8 +11,9 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-INPUT_SONG = Path("test_data/input_song.mp3")
-STEMS_DIR = Path("output/stems/htdemucs/input_song")
+REPO_ROOT = Path(__file__).resolve().parent.parent
+INPUT_SONG = REPO_ROOT / "test_data" / "input_song.mp3"
+STEMS_DIR = REPO_ROOT / "output" / "stems" / "htdemucs" / "input_song"
 VOCALS = STEMS_DIR / "vocals.wav"
 NO_VOCALS = STEMS_DIR / "no_vocals.wav"
 
