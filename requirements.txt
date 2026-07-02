@@ -10,3 +10,8 @@ requests==2.34.2
 transformers==4.41.0
 sentencepiece==0.2.0
 sacremoses==0.1.1
+# setuptools 65.5.1: pretty_midi 0.2.10 requires pkg_resources which is only available in setuptools <82
+setuptools==65.5.1
+basic-pitch==0.3.3
+pretty_midi==0.2.10
+librosa==0.10.2
