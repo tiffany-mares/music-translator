@@ -551,7 +551,7 @@ Done when: either the gap is confirmed and `dsp_core` closes it, or it's confirm
 
 ## 11. Open decisions
 
-- Translation granularity: line-by-line vs phrase-level
+- ~~Translation granularity: line-by-line vs phrase-level~~ — **line-by-line stands**, confirmed by the Phase 1.3 line-by-line RO/EN review (Helsinki-NLP/opus-mt-ROMANCE-en, "Dragostea din tei"): every genuine error found (dropped verbs/title-phrase, pronoun flips, an untranslated idiom) was a single-line model weakness a sliding context window would not have fixed, and the largest error source by line count was upstream Phase 1.2 transcription noise, not a granularity problem. See `notes/phase1.md` §1.3 for the full evidence.
 - ~~Whisper `large-v3` vs `medium`~~ — **reversed to `large-v3`** by the Phase 1.2 benchmark (Section 5.3): `medium` missed the song's entire opening "Maia-hi" chant on the real test song ("Dragostea din tei", Romanian), while `large-v3` caught it (36 lines/269 words vs 25 lines/252 words); the uploader/listener also judged `large-v3` better via direct comparison. See `notes/phase1.md` §1.2 for the full evidence.
 - MongoDB Atlas vs DocumentDB — Atlas first for speed and the free tier; DocumentDB only becomes worth revisiting if this ever moves back inside a VPC for other reasons
 - Build the C++ DSP core only if Basic Pitch's output shows a measurable gap
