@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-LyraLearn (repo: music-translator) has no implementation yet — only `README.md` and the architecture decisions below. There are no build/lint/test commands because no code exists. The project follows a phased build plan (see "Build phases"); start with Phase 1 and add real commands to this file as each phase's code lands.
+LyraLearn (repo: music-translator) is in Phase 1 of the build plan (see `architecture.md` section 10). Phase 1.1 (local Demucs separation) is done — see `notes/phase1.md` for the recorded quality baseline. Setup: `py -3.11 -m venv lyralearn-env && source lyralearn-env/Scripts/activate && pip install -r requirements.txt`. Run `python scripts/check_gpu.py` then `python -m demucs.separate -n htdemucs --two-stems vocals -o output/stems test_data/input_song.mp3`, validated by `python scripts/validate_stems.py`. Remaining phases are not implemented yet; add their commands here as they land.
 
 ## What this is
 
