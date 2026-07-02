@@ -4,7 +4,7 @@
 
 **Date:** 2026-07-02
 **Test song:** (untitled MP3 — no ID3 tags) (`test_data/input_song.mp3`, 215.4s / 3:35)
-**Song language:** not yet confirmed (plan criteria requested a Romanian track; verify during Phase 1.2 transcription)
+**Song language:** Romanian (confirmed by uploader)
 **GPU used:** CPU only (CUDA available: False)
 **Listener's verbatim report:** "both the vocals and the no vocals came through clear"
 
