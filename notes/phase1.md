@@ -79,7 +79,7 @@ Supporting data from validation:
 **Contour check (listened alongside the vocal, not in isolation):**
 - Octave errors: none noted — the listener gave a single overall verdict ("it sounds right"), not a per-category breakdown.
 - Missed notes: none noted — same single overall verdict; no chant/melisma-specific issue was separately reported.
-- Spurious notes: none noted — same single overall verdict; the pitch range's extremes (MIDI 29 and 97) are flagged by the implementer as likely breaths/artifacts, but the listener's verdict covered the audible result as a whole and raised no spurious-note concern.
+- Spurious notes: none noted — same single overall verdict. (The extraction's pitch extremes, MIDI 29 and 97, fall outside a typical vocal range; the listener raised no concern about them.)
 - Note-boundary drift: none noted — same single overall verdict.
 
 **Beat/tempo observation (evidence for the Phase 6.5 C++ DSP core decision — decision stays open):** informal — no timing looseness was noted in the listener's overall verdict; no dedicated rhythm comparison was performed.
