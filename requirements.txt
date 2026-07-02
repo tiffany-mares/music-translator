@@ -10,3 +10,8 @@ requests==2.34.2
 transformers==4.41.0
 sentencepiece==0.2.0
 sacremoses==0.1.1
+# setuptools pin: pretty_midi 0.2.10 needs pkg_resources (removed in setuptools 82); versions >=67.5 emit a deprecation warning on import, so <67.5 keeps output clean
+setuptools==65.5.1
+basic-pitch==0.3.3
+pretty_midi==0.2.10
+librosa==0.10.2
