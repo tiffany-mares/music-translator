@@ -40,7 +40,7 @@ Supporting data from validation:
 - large-v3: caught the opening chant that medium missed.
 - Difference that matters: on the re-run, large-v3 produced 36 lines / 269 words vs medium's 25 lines / 252 words on "Dragostea din tei" (Romanian) — the gap is largely the missing opening chant in medium's output.
 
-**Line-level timing:** Validated via a local preview page (`output/timing_preview.html`, untracked) built by the controller in place of the planned VLC/SRT flow (VLC was not installed) — it plays the vocal stem and highlights the active line and word from the transcript timestamps, with a model dropdown to compare medium vs large-v3. No line-level timing issues noted by the listener.
+**Line-level timing:** Validated via a local preview page (`output/timing_preview.html`, untracked) built by the controller in place of the planned VLC/SRT flow (VLC was not installed) — it plays the vocal stem and highlights the active line and word from the transcript timestamps, with a model dropdown to compare medium vs large-v3. Covered by the same overall verdict via the preview page; no line-specific issue was separately reported.
 
 **Word-level timing (done-when check, 3-4+ lines of different character):**
 - Checked via the same preview page (currentTime + timestamp highlighting, the same mechanism the future player will use) rather than the planned VLC `.words.srt` swap-in; per-line itemized timing notes were not taken.
