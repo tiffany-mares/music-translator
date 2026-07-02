@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-LyraLearn (repo: music-translator) is in Phase 1 of the build plan (see `architecture.md` section 10). Phase 1.1 (local Demucs separation) is done — see `notes/phase1.md` for the recorded quality baseline. Setup: `py -3.11 -m venv lyralearn-env && source lyralearn-env/Scripts/activate && pip install -r requirements.txt`. Run `python scripts/check_gpu.py` then `python -m demucs.separate -n htdemucs --two-stems vocals -o output/stems test_data/input_song.mp3`, validated by `python scripts/validate_stems.py`. Remaining phases are not implemented yet; add their commands here as they land.
+LyraLearn (repo: music-translator) is in Phase 1 of the build plan (see `architecture.md` section 10). Phases 1.1 (local Demucs separation) and 1.2 (faster-whisper transcription) are done — see `notes/phase1.md` for the recorded quality baselines and the model-size/forced-alignment decisions. Setup: `py -3.11 -m venv lyralearn-env && source lyralearn-env/Scripts/activate && pip install -r requirements.txt` (PowerShell: `lyralearn-env\Scripts\Activate.ps1`). Separation: `python scripts/check_gpu.py` then `python -m demucs.separate -n htdemucs --two-stems vocals -o output/stems test_data/input_song.mp3`, validated by `python scripts/validate_stems.py`. Transcription: `python scripts/run_transcription.py --model-size large-v3` (dumps JSON + line/word SRT to `output/`). Tests: `python -m pytest tests/ -v`. Remaining phases are not implemented yet; add their commands here as they land.
 
 ## What this is
 
@@ -23,7 +23,7 @@ Browser (React+TS) --upload--> S3 (pre-signed PUT)
         --> new song? --> Step Functions (STANDARD):
               ChunkAudio (Lambda) --> Map state, ~40s overlapping chunks in parallel:
                 SageMaker Processing Jobs (GPU, ml.g4dn.xlarge), per chunk:
-                  Demucs (two-stems) -> faster-whisper (medium) -> Basic Pitch [+ C++ DSP core via pybind11]
+                  Demucs (two-stems) -> faster-whisper (large-v3) -> Basic Pitch [+ C++ DSP core via pybind11]
               --> StitchResults (Lambda): crossfade audio at overlaps, offset+merge/dedupe transcript & pitch data
               --> RunTranslation (Lambda) --> MarkComplete
   --> audio playback starts immediately once upload validation passes (doesn't wait on the pipeline)
@@ -62,7 +62,7 @@ Full schemas (DynamoDB item shapes, MongoDB doc shape) and the complete API endp
 
 `architecture.md` section 10 has the authoritative, granular sub-phase breakdown with explicit "done when" conditions for every step — read it before starting work on any phase rather than relying on the summary below. Don't jump ahead (e.g. don't build chunking (2.4-2.6) before the linear pipeline (2.1-2.3) works; don't build the Go WebSocket stack (Phase 6) before Phase 4's polling ships).
 
-1. **Local pipeline, no AWS** — Demucs (two-stems) → faster-whisper (medium) → Helsinki-NLP → Basic Pitch on one local file, producing `song_lyrics.json` in the exact MongoDB doc shape.
+1. **Local pipeline, no AWS** — Demucs (two-stems) → faster-whisper (large-v3) → Helsinki-NLP → Basic Pitch on one local file, producing `song_lyrics.json` in the exact MongoDB doc shape.
 2. **ML pipeline in AWS** — containerize, wire the linear Step Functions ASL, *then* add chunking (`ChunkAudio`/`Map`/`StitchResults`), then validate timing against the ~70-110s target on real songs.
 3. **API layer, auth, dedup** — Cognito + DynamoDB (GSI1/GSI2/GSI3) + `WebSocketConnections` schema, core Python Lambda routes, Rust Lambda validation, *then* fingerprinting/dedup.
 4. **Frontend** — scaffold + auth, upload + job status polling, immediate-playback player shell, lyrics hydration, loading/error states.
@@ -77,7 +77,7 @@ Full schemas (DynamoDB item shapes, MongoDB doc shape) and the complete API endp
 - MongoDB Atlas vs DocumentDB — Atlas first for speed/free tier; DocumentDB only worth revisiting if this ever moves back inside a VPC for other reasons.
 - Build the C++ DSP core only if Basic Pitch's output shows a measurable gap.
 - Plain Java Lambda vs Spring Cloud Function for the learning service — plain Lambda is the leaner, cheaper default at this scale.
-- **Resolved**: Whisper `large-v3` vs `medium` — settled on `medium` (via `faster-whisper`) for the cost-neutral speed win; revisit only if Phase 1/2 benchmarking shows the accuracy gap is unacceptable on real lyrics.
+- **Resolved**: Whisper `large-v3` vs `medium` — settled on `large-v3` (via `faster-whisper`) per the Phase 1.2 benchmark, reversing the earlier `medium` default: `medium` missed the song's entire opening chant that `large-v3` caught, and the listener judged `large-v3` better on the real song (see `notes/phase1.md`).
 
 ## Security / IAM conventions to follow
 

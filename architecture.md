@@ -47,7 +47,7 @@ API Gateway (HTTP API + WebSocket API, JWT authorizer against Cognito User Pool)
       |         v
       |    ChunkAudio (Lambda) --> Map state, fan out N overlapping ~40s chunks in parallel:
       |      SageMaker Processing Jobs (GPU, ml.g4dn.xlarge, per chunk):
-      |        Demucs (two-stems) -> faster-whisper (medium) -> Basic Pitch  [Python + PyTorch]
+      |        Demucs (two-stems) -> faster-whisper (large-v3) -> Basic Pitch  [Python + PyTorch]
       |                                                              ^
       |                                                              |
       |                                                  C++ DSP core (pybind11 .so)
@@ -145,7 +145,7 @@ Data layer:
 }
 ```
 
-`MaxConcurrency: 6` bounds how many chunk jobs run at once — a ~3.5 minute song splits into roughly 5-6 chunks at 40s each, so this comfortably processes the whole song in one wave rather than queueing. `RunChunkPipeline` runs the same consolidated container from Section 5.3 (Demucs two-stems → faster-whisper `medium`, running concurrently with Basic Pitch), just on a chunk instead of the full song — each chunk still pays its own instance boot cost, which is why wall-clock time drops roughly in proportion to concurrency rather than to zero.
+`MaxConcurrency: 6` bounds how many chunk jobs run at once — a ~3.5 minute song splits into roughly 5-6 chunks at 40s each, so this comfortably processes the whole song in one wave rather than queueing. `RunChunkPipeline` runs the same consolidated container from Section 5.3 (Demucs two-stems → faster-whisper `large-v3`, running concurrently with Basic Pitch), just on a chunk instead of the full song — each chunk still pays its own instance boot cost, which is why wall-clock time drops roughly in proportion to concurrency rather than to zero.
 
 Each `MarkFailed`/`MarkComplete` write is what the Go Lambda's DynamoDB Streams trigger picks up to push to the connected client (Section 5.6).
 
@@ -202,7 +202,7 @@ If `check_duplicate` returns an existing `songId`, the Lambda writes a `SONG#{ne
 
 - **Chunked processing**: this container now processes one ~40-second audio chunk at a time (Section 4's `Map` state fans multiple chunks out in parallel), not a whole song sequentially
 - **Demucs two-stems mode**: only separates vocals vs. everything else, instead of the full 4-way drums/bass/other split — skips computing stems nothing downstream uses
-- **`faster-whisper` on `medium`** instead of `large-v3` — faster and lighter, accepting a modest accuracy tradeoff (Section 11)
+- **`faster-whisper` on `large-v3`** — chosen over `medium` per the Phase 1.2 benchmark, which found `medium` dropped the song's entire opening chant that `large-v3` caught (Section 11)
 
 ```dockerfile
 FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
@@ -213,7 +213,7 @@ RUN pip install demucs==4.0.1 faster-whisper==1.0.3 basic-pitch==0.3.4 pybind11
 # version of this Dockerfile, which left Demucs still downloading its checkpoint on
 # every job start. Confirm Basic Pitch's bundled model doesn't need the same treatment.
 RUN python -c "from demucs.pretrained import get_model; get_model('htdemucs')"
-RUN python -c "from faster_whisper import WhisperModel; WhisperModel('medium', device='cpu')"
+RUN python -c "from faster_whisper import WhisperModel; WhisperModel('large-v3', device='cpu')"
 
 COPY dsp_core/ /opt/dsp_core/
 RUN cd /opt/dsp_core && python setup.py build_ext --inplace
@@ -247,7 +247,7 @@ def run(chunk_audio_path: str, chunk_start_offset: float, output_dir: str):
     write_outputs(output_dir, stems, transcript, pitch_data, chunk_start_offset)
 
 def transcribe(vocal_path: str) -> dict:
-    model = WhisperModel("medium", device="cuda", compute_type="float16")
+    model = WhisperModel("large-v3", device="cuda", compute_type="float16")
     segments, _ = model.transcribe(vocal_path, word_timestamps=True)
     return {"segments": list(segments)}
 
@@ -552,7 +552,7 @@ Done when: either the gap is confirmed and `dsp_core` closes it, or it's confirm
 ## 11. Open decisions
 
 - Translation granularity: line-by-line vs phrase-level
-- ~~Whisper `large-v3` vs `medium`~~ — **resolved to `medium`** for the cost-neutral speed win (Section 5.3); revisit only if Phase 1/2 benchmarking shows the accuracy gap is unacceptable for real lyrics
+- ~~Whisper `large-v3` vs `medium`~~ — **reversed to `large-v3`** by the Phase 1.2 benchmark (Section 5.3): `medium` missed the song's entire opening "Maia-hi" chant on the real test song ("Dragostea din tei", Romanian), while `large-v3` caught it (36 lines/269 words vs 25 lines/252 words); the uploader/listener also judged `large-v3` better via direct comparison. See `notes/phase1.md` §1.2 for the full evidence.
 - MongoDB Atlas vs DocumentDB — Atlas first for speed and the free tier; DocumentDB only becomes worth revisiting if this ever moves back inside a VPC for other reasons
 - Build the C++ DSP core only if Basic Pitch's output shows a measurable gap
 - Plain Java Lambda vs Spring Cloud Function for the learning service — plain Lambda is the leaner, cheaper choice at this scale

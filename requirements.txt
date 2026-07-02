@@ -3,3 +3,7 @@ torchaudio==2.3.0
 demucs==4.0.1
 soundfile==0.12.1
 numpy==1.26.4
+faster-whisper==1.0.3
+pytest==8.2.2
+# faster-whisper 1.0.3 imports requests but doesn't declare it; huggingface-hub 1.x no longer pulls it in
+requests==2.34.2
