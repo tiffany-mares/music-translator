@@ -68,3 +68,24 @@ Supporting data from validation:
 **Decision — translation granularity (uploader-confirmed):** line-by-line stands, because the genuine errors (lines 2/3/8/9/10/12/13/14/22/23/26/30/31/34/35) are single-line model weaknesses a sliding window wouldn't fix, and the largest error source by line count (lines 5/18/20/21/24/25/27/28/32/36) is upstream transcription noise from Phase 1.2 — a transcription-quality concern, not a granularity one.
 
 **Verdict:** coherent and faithful enough — proceed to Phase 1.4. Translation-quality improvement (a stronger model or post-editing) and transcription-noise reduction are noted as potential future quality work, distinct from granularity.
+
+## 1.4 — Pitch extraction (Basic Pitch)
+
+**Date:** 2026-07-02
+**Input:** `output/stems/htdemucs/input_song/vocals.wav` (Phase 1.1 stem, 215.4s) — the stem, not the full mix
+**Model:** Basic Pitch ICASSP 2022 (bundled weights, TensorFlow backend, CPU, 25.4s) → 691 note events, pitch range MIDI 29-97
+**Validation method:** `output/pitch_preview.html` — WebAudio synth doubling the extracted notes over the real vocal, with scrolling piano-roll (no DAW on this machine). The roll clips displayed pitches to 40-90, so the extraction's extremes (29-97) were audible but not visible on the roll.
+
+**Contour check (listened alongside the vocal, not in isolation):**
+- Octave errors: none noted — the listener gave a single overall verdict ("it sounds right"), not a per-category breakdown.
+- Missed notes: none noted — same single overall verdict; no chant/melisma-specific issue was separately reported.
+- Spurious notes: none noted — same single overall verdict; the pitch range's extremes (MIDI 29 and 97) are flagged by the implementer as likely breaths/artifacts, but the listener's verdict covered the audible result as a whole and raised no spurious-note concern.
+- Note-boundary drift: none noted — same single overall verdict.
+
+**Beat/tempo observation (evidence for the Phase 6.5 C++ DSP core decision — decision stays open):** informal — no timing looseness was noted in the listener's overall verdict; no dedicated rhythm comparison was performed.
+
+**Cross-reference vs earlier phases:** no weak passages were reported by the listener, so there is no overlap to assess against Phase 1.2/1.3's hard passages (chant lines 1/28, garbled lines 5/18/20/21/24/25/27/32/36).
+
+**Environment note:** TensorFlow's oneDNN kernels hard-crashed silently on full-length audio until disabled in the stage (`TF_ENABLE_ONEDNN_OPTS=0` via `setdefault`, the same baked-in-workaround pattern used in Phase 1.2).
+
+**Verdict:** contour tracks the sung melody — proceed to Phase 1.5.

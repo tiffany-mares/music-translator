@@ -206,7 +206,7 @@ If `check_duplicate` returns an existing `songId`, the Lambda writes a `SONG#{ne
 
 ```dockerfile
 FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
-RUN pip install demucs==4.0.1 faster-whisper==1.0.3 basic-pitch==0.3.4 pybind11
+RUN pip install demucs==4.0.1 faster-whisper==1.0.3 basic-pitch==0.3.3 pybind11
 
 # Bake model weights into the image layer at build time — no download on job start.
 # Both Demucs and Whisper weights need this; only Whisper was covered in an earlier
@@ -554,7 +554,7 @@ Done when: either the gap is confirmed and `dsp_core` closes it, or it's confirm
 - ~~Translation granularity: line-by-line vs phrase-level~~ — **line-by-line stands**, confirmed by the Phase 1.3 line-by-line RO/EN review (Helsinki-NLP/opus-mt-ROMANCE-en, "Dragostea din tei"): every genuine error found (dropped verbs/title-phrase, pronoun flips, an untranslated idiom) was a single-line model weakness a sliding context window would not have fixed, and the largest error source by line count was upstream Phase 1.2 transcription noise, not a granularity problem. See `notes/phase1.md` §1.3 for the full evidence.
 - ~~Whisper `large-v3` vs `medium`~~ — **reversed to `large-v3`** by the Phase 1.2 benchmark (Section 5.3): `medium` missed the song's entire opening "Maia-hi" chant on the real test song ("Dragostea din tei", Romanian), while `large-v3` caught it (36 lines/269 words vs 25 lines/252 words); the uploader/listener also judged `large-v3` better via direct comparison. See `notes/phase1.md` §1.2 for the full evidence.
 - MongoDB Atlas vs DocumentDB — Atlas first for speed and the free tier; DocumentDB only becomes worth revisiting if this ever moves back inside a VPC for other reasons
-- Build the C++ DSP core only if Basic Pitch's output shows a measurable gap
+- Build the C++ DSP core only if Basic Pitch's output shows a measurable gap. **Phase 1.4 evidence:** informal only — the listener's single overall verdict on the real test song ("it sounds right") noted no rhythm/timing looseness, but no dedicated beat/tempo comparison was performed; see `notes/phase1.md` §1.4. Decision still deferred to Phase 6.5's benchmark.
 - Plain Java Lambda vs Spring Cloud Function for the learning service — plain Lambda is the leaner, cheaper choice at this scale
 - **New**: chunk overlap duration (currently ~2-3s) — this is a tuning knob between stitch quality and wasted redundant compute at the seams; validate against real songs in Phase 2 rather than assuming the initial estimate is right
 - **New**: how aggressively to dedupe via audio fingerprinting — chromaprint-based matching can have false positives on very similar-sounding but distinct tracks (e.g. two different live recordings of the same song); worth a manual review step before auto-linking in the early going, rather than trusting it blindly from day one
