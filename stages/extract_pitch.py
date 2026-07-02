@@ -9,13 +9,23 @@ extract_pitch() so unit tests of the pure reshaping logic don't pay the
 multi-second TensorFlow import (mirrors the lazy torch import in
 stages/transcribe.py).
 """
+import os
+
+# TensorFlow's oneDNN kernels hard-crash silently (no traceback) on this
+# Windows setup when processing full-length audio; a 20s slice works.
+# Disabling oneDNN before TF loads makes the full run complete. Revisit on
+# a TensorFlow upgrade.
+os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
 
 
 def to_notes(note_events) -> list[dict]:
     """Reshape Basic Pitch note_events - (start, end, pitch, amplitude,
-    pitch_bend) tuples - into the note dicts downstream phases consume."""
+    pitch_bend) tuples - into the note dicts downstream phases consume.
+
+    Casts to native Python types: basic-pitch 0.3.3 emits numpy scalars,
+    which json.dump rejects."""
     return [
-        {"pitch": note[2], "start": note[0], "end": note[1], "velocity": note[3]}
+        {"pitch": int(note[2]), "start": float(note[0]), "end": float(note[1]), "velocity": float(note[3])}
         for note in note_events
     ]
 

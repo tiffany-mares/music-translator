@@ -1,3 +1,5 @@
+import numpy as np
+
 from stages.extract_pitch import to_notes
 
 
@@ -26,3 +28,23 @@ def test_to_notes_preserves_input_order():
 
 def test_to_notes_empty_input():
     assert to_notes([]) == []
+
+
+def test_to_notes_coerces_numpy_scalars_to_native_types():
+    # basic-pitch 0.3.3 note_events carry numpy scalars; json.dump rejects
+    # them ("Object of type int64 is not JSON serializable"), so to_notes
+    # must hand every consumer native Python types.
+    note_events = [
+        (np.float64(1.0), np.float64(1.5), np.int64(62), np.float32(0.8), None),
+    ]
+
+    notes = to_notes(note_events)
+
+    assert type(notes[0]["pitch"]) is int
+    assert type(notes[0]["start"]) is float
+    assert type(notes[0]["end"]) is float
+    assert type(notes[0]["velocity"]) is float
+    assert notes[0]["pitch"] == 62
+    assert notes[0]["start"] == 1.0
+    assert notes[0]["end"] == 1.5
+    assert abs(notes[0]["velocity"] - 0.8) < 1e-6

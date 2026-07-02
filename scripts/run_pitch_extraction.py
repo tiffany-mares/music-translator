@@ -29,24 +29,6 @@ def midi_to_freq(midi_note: float) -> float:
     return 440.0 * 2 ** ((midi_note - 69) / 12)
 
 
-def to_native_notes(notes: list) -> list:
-    """Coerce numpy scalars in note dicts to native Python types.
-
-    basic-pitch 0.3.3's note_events carry numpy scalars (np.int64 pitch,
-    np.float64 times/amplitude); json.dump rejects them with
-    "Object of type int64 is not JSON serializable".
-    """
-    return [
-        {
-            "pitch": int(n["pitch"]),
-            "start": float(n["start"]),
-            "end": float(n["end"]),
-            "velocity": float(n["velocity"]),
-        }
-        for n in notes
-    ]
-
-
 def build_preview_html(notes: list) -> str:
     notes_json = json.dumps(notes)
     return """<!DOCTYPE html>
@@ -159,7 +141,6 @@ def main() -> None:
     started = time.monotonic()
     pitch_data = extract_pitch(str(VOCALS))
     elapsed = time.monotonic() - started
-    pitch_data["notes"] = to_native_notes(pitch_data["notes"])
 
     out_mid = REPO_ROOT / "output" / "melody.mid"
     save_midi(pitch_data["midi"], str(out_mid))
