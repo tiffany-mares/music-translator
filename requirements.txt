@@ -1,0 +1,4 @@
+torch==2.3.0
+torchaudio==2.3.0
+demucs==4.0.1
+soundfile==0.12.1

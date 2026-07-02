@@ -1,0 +1,13 @@
+# Python virtual environment
+lyralearn-env/
+__pycache__/
+*.pyc
+
+# Local ML pipeline data — large, regenerable, or copyrighted; never commit
+test_data/*
+!test_data/.gitkeep
+output/
+
+# OS
+.DS_Store
+Thumbs.db
