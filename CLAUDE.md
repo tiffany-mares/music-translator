@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-LyraLearn (repo: music-translator) is in Phase 1 of the build plan (see `architecture.md` section 10). Phases 1.1 (local Demucs separation) and 1.2 (faster-whisper transcription) are done — see `notes/phase1.md` for the recorded quality baselines and the model-size/forced-alignment decisions. Setup: `py -3.11 -m venv lyralearn-env && source lyralearn-env/Scripts/activate && pip install -r requirements.txt` (PowerShell: `lyralearn-env\Scripts\Activate.ps1`). Separation: `python scripts/check_gpu.py` then `python -m demucs.separate -n htdemucs --two-stems vocals -o output/stems test_data/input_song.mp3`, validated by `python scripts/validate_stems.py`. Transcription: `python scripts/run_transcription.py --model-size large-v3` (dumps JSON + line/word SRT to `output/`). Tests: `python -m pytest tests/ -v`. Remaining phases are not implemented yet; add their commands here as they land.
+LyraLearn (repo: music-translator) is in Phase 1 of the build plan (see `architecture.md` section 10). Phases 1.1 (local Demucs separation), 1.2 (faster-whisper transcription), and 1.3 (MarianMT translation) are done — see `notes/phase1.md` for the recorded quality baselines and decisions (model size, forced alignment, translation granularity). Setup: `py -3.11 -m venv lyralearn-env && source lyralearn-env/Scripts/activate && pip install -r requirements.txt` (PowerShell: `lyralearn-env\Scripts\Activate.ps1`). Separation: `python scripts/check_gpu.py` then `python -m demucs.separate -n htdemucs --two-stems vocals -o output/stems test_data/input_song.mp3`, validated by `python scripts/validate_stems.py`. Transcription: `python scripts/run_transcription.py --model-size large-v3` (dumps JSON + line/word SRT to `output/`). Translation: `python scripts/run_translation.py` (fills translatedText, dumps JSON + RO/EN review file to `output/`). Tests: `python -m pytest tests/ -v`. Remaining phases are not implemented yet; add their commands here as they land.
 
 ## What this is
 
@@ -71,7 +71,7 @@ Full schemas (DynamoDB item shapes, MongoDB doc shape) and the complete API endp
 
 ## Open decisions (don't treat these as settled)
 
-- Translation granularity: line-by-line vs phrase-level.
+- **Resolved (Phase 1.3):** line-by-line stands — the Phase 1.3 line-by-line review found only single-line model weaknesses (dropped words, a title-phrase drop, pronoun flips) plus upstream transcription noise, none of which a sliding context window would have fixed (see `notes/phase1.md`).
 - Chunk overlap duration (currently ~2-3s) — a tuning knob between stitch quality and redundant compute at the seams; validate against real songs in Phase 2, don't assume the initial estimate is right.
 - How aggressively to dedupe via audio fingerprinting — chromaprint matching can false-positive on similar-but-distinct tracks (e.g. two different live recordings); consider a manual review step before auto-linking early on rather than trusting it blindly.
 - MongoDB Atlas vs DocumentDB — Atlas first for speed/free tier; DocumentDB only worth revisiting if this ever moves back inside a VPC for other reasons.

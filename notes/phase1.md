@@ -51,3 +51,20 @@ Supporting data from validation:
 **Decision — forced alignment:** not needed, because the listener reported word-level timing "works well" via the preview-page check.
 
 **Verdict:** proceed to Phase 1.3.
+
+## 1.3 — Translation (Helsinki-NLP/MarianMT)
+
+**Date:** 2026-07-02
+**Input:** `output/transcript_large-v3.json` (36 lines) → `output/translation_check.json`
+**Model:** Helsinki-NLP/opus-mt-ROMANCE-en — the planned `opus-mt-ro-en` does not exist on the Hub (404; anonymous requests to a nonexistent repo return 401, which initially looked like an auth failure). The Romance-group source-multilingual model covers Romanian with no input prefix needed. One batched `generate()` call, CPU (model load 37.0s including ~300 MB download, translate 5.4s for 36 lines).
+
+**Line-by-line review (every line read against the original by the uploader, via uploader-supplied complete reference translations for all 36 lines diffed against the model output line by line):**
+- Basic correctness: lines 8/12/30/34 dropped the verb "take" (elliptical repetition came out as "No, you don't..."); lines 9/13/22/26/31/35 dropped "din tei" ("under the linden tree" — the song's title phrase) entirely; lines 10/14 have a pronoun flip ("your" → "her"); line 23 came out "We remember her eyes"; line 3 has a subtle mood shift (an imperative read as indicative).
+- Idioms translated literally: line 2 "haiduc" left untranslated (should be "outlaw"); the recurring "din tei" drop (lines 9/13/22/26/31/35, also counted above) is a cultural-phrase loss, not a literal-but-lost-meaning idiom.
+- Cross-line context loss (pronouns/continuations): none identified — every genuine error is a single-line weakness; a sliding context window would not have fixed the dropped title phrase or the pronoun flips.
+- Transcription-error propagation (largest error source by line count; an upstream Phase 1.2 issue, not a translation defect): lines 5, 18, 20, 21, 24, 25, 27, 28, 32, 36 — the translator faithfully translated already-garbled input (e.g. a misheard phrase came out "only them").
+- Repeated-line consistency (machine-checked): CONSISTENT for all 8 repeated groups.
+
+**Decision — translation granularity (uploader-confirmed):** line-by-line stands, because the genuine errors (lines 2/3/8/9/10/12/13/14/22/23/26/30/31/34/35) are single-line model weaknesses a sliding window wouldn't fix, and the largest error source by line count (lines 5/18/20/21/24/25/27/28/32/36) is upstream transcription noise from Phase 1.2 — a transcription-quality concern, not a granularity one.
+
+**Verdict:** coherent and faithful enough — proceed to Phase 1.4. Translation-quality improvement (a stronger model or post-editing) and transcription-noise reduction are noted as potential future quality work, distinct from granularity.
