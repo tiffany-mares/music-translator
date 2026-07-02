@@ -9,6 +9,8 @@ Writes, per model size:
 
 Load an .srt over the vocal stem in any player (e.g. VLC: open vocals.wav,
 then Subtitles > Add Subtitle File) instead of scrubbing raw JSON.
+Alternatively, output/timing_preview.html (when generated) plays the stem
+with live line/word highlighting - no player install needed.
 """
 import argparse
 import json

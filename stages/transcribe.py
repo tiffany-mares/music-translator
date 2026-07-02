@@ -16,7 +16,7 @@ from faster_whisper import WhisperModel
 
 def transcribe(
     vocal_stem_path: str,
-    model_size: str = "medium",
+    model_size: str = "large-v3",
     language: str = "ro",
     device: str | None = None,
 ) -> dict:
@@ -26,7 +26,7 @@ def transcribe(
         device = "cuda" if torch.cuda.is_available() else "cpu"
     compute_type = "float16" if device == "cuda" else "int8"
     model = WhisperModel(model_size, device=device, compute_type=compute_type)
-    segments, info = model.transcribe(
+    segments, _ = model.transcribe(
         vocal_stem_path, language=language, word_timestamps=True
     )
     # faster-whisper returns a generator that only yields once; materialize
