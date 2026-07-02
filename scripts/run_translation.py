@@ -57,9 +57,9 @@ def main() -> None:
         sys.exit(1)
 
     lines = json.loads(args.input.read_text(encoding="utf-8"))
-    print(f"Loading Helsinki-NLP/opus-mt-ROMANCE-en ...")
+    print("Loading Helsinki-NLP/opus-mt-ROMANCE-en ...")  # model name matches load_translator()'s defaults
     started = time.monotonic()
-    tokenizer, model = load_translator("ROMANCE", "en")
+    tokenizer, model = load_translator()
     load_elapsed = time.monotonic() - started
 
     print(f"Translating {len(lines)} lines (one batched generate call) ...")

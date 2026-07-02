@@ -2,13 +2,15 @@
 
 Fills the translatedText slots in the section 6.2 line dicts produced by
 stages/transcribe.py, preserving the shape for later phases. Model naming
-follows Helsinki-NLP/opus-mt-{source}-{target}; a nonexistent pair fails
-clearly at load time.
+follows Helsinki-NLP/opus-mt-{source}-{target}. Note: a nonexistent pair does
+NOT fail clearly — the Hub returns a 401 that looks like an auth failure. No
+direct ro-en pair exists; the ROMANCE-en group model covers Romanian with no
+input prefix.
 """
 from transformers import MarianMTModel, MarianTokenizer
 
 
-def load_translator(source_lang: str = "ro", target_lang: str = "en"):
+def load_translator(source_lang: str = "ROMANCE", target_lang: str = "en"):
     model_name = f"Helsinki-NLP/opus-mt-{source_lang}-{target_lang}"
     tokenizer = MarianTokenizer.from_pretrained(model_name)
     model = MarianMTModel.from_pretrained(model_name)
