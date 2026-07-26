@@ -1,0 +1,36 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SongPrefixRW",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Resource": "arn:aws:s3:::__BUCKET__/songs/*"
+    },
+    {
+      "Sid": "ListSongsPrefixOnly",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::__BUCKET__",
+      "Condition": { "StringLike": { "s3:prefix": "songs/*" } }
+    },
+    {
+      "Sid": "EcrAuthTokenIsAccountWideByDesign",
+      "Effect": "Allow",
+      "Action": "ecr:GetAuthorizationToken",
+      "Resource": "*"
+    },
+    {
+      "Sid": "EcrPullThisRepoOnly",
+      "Effect": "Allow",
+      "Action": ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer", "ecr:BatchCheckLayerAvailability"],
+      "Resource": "arn:aws:ecr:__REGION__:__ACCOUNT_ID__:repository/lyralearn-ml"
+    },
+    {
+      "Sid": "ProcessingJobLogs",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:__REGION__:__ACCOUNT_ID__:log-group:/aws/sagemaker/*"
+    }
+  ]
+}
