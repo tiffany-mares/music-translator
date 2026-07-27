@@ -123,4 +123,6 @@ Step Functions: zero new executions (before/after 5/5 linear, 2/2 chunked)
 PASS - Phase 3.4 done-when met.
 ```
 
+**Final-review hardening:** fingerprint panics (e.g. symphonia's `SampleBuffer::copy_interleaved_ref` asserting on a stitched mono→stereo mp3 with a larger later-packet spec) now degrade to `VALIDATED`-without-dedup via `catch_unwind` around `fingerprint_bytes` instead of surfacing as a Lambda 500, and the gate's `FP1#` cleanup refuses to run above 10 items without `ALLOW_FP_CLEANUP=1` set.
+
 **Verdict:** 3.4 done. Next: 3.5 (Step Functions pass-path wiring + the BINDING MongoDB migration). Phase 2.6 remains parked at the quota-6 gate.

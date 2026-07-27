@@ -22,10 +22,22 @@ CHUNKED_ARN="arn:aws:states:$AWS_REGION:503233513399:stateMachine:lyralearn-pipe
 # Idempotency: de-index fingerprints left by prior gate runs (dev table -
 # every FP1# entry at this phase is gate residue). Without this, a re-run's
 # song A matches its own previous upload and the VALIDATED assertions fail.
-aws dynamodb scan --table-name LyraLearnTable --region "$AWS_REGION" \
+# Guard: this scan+strip is scoped to dev-scale residue. Once real songs
+# accumulate FP1# entries (post-3.5), blindly stripping GSI3PK from all of
+# them would silently de-index every real song's dedup entry. So: capture
+# the scan first, count it, and only auto-proceed at <=10 items (today's
+# dev scale); above that, require an explicit ALLOW_FP_CLEANUP=1 opt-in
+# rather than defaulting to safe-but-silent no-op or unsafe-but-quiet wipe.
+FP_ITEMS=$(aws dynamodb scan --table-name LyraLearnTable --region "$AWS_REGION" \
   --filter-expression "begins_with(GSI3PK, :p)" \
   --expression-attribute-values '{":p":{"S":"FP1#"}}' \
-  --projection-expression "PK,SK" --query "Items" --output json |
+  --projection-expression "PK,SK" --query "Items" --output json)
+FP_COUNT=$(echo "$FP_ITEMS" | python -c "import json,sys; print(len(json.load(sys.stdin)))")
+if [ "$FP_COUNT" -gt 10 ] && [ "${ALLOW_FP_CLEANUP:-0}" != "1" ]; then
+  echo "refusing to de-index $FP_COUNT fingerprints - real data? set ALLOW_FP_CLEANUP=1 to override"
+  exit 1
+fi
+echo "$FP_ITEMS" |
 python -c "
 import json,subprocess,sys
 for it in json.load(sys.stdin):

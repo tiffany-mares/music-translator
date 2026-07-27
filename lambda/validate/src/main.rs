@@ -163,7 +163,19 @@ async fn handler(event: Request) -> Result<Response<Body>, Error> {
             let full = s3.get_object().bucket(&bucket).key(&key).send().await?;
             let bytes = full.body.collect().await?.to_vec();
 
-            let fp = match fingerprint::fingerprint_bytes(bytes, format) {
+            // fingerprint_bytes touches no shared state (pure function over the
+            // owned `bytes`/`format` args), so AssertUnwindSafe is sound here.
+            // symphonia can panic on adversarial/unusual input (e.g.
+            // SampleBuffer::copy_interleaved_ref asserts if a later packet's spec
+            // is larger than the one the buffer was sized from - real-world
+            // stitched mono->stereo mp3s hit this). A panic must degrade the same
+            // way a decode Err does, not surface as a Lambda 500.
+            let fp_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                fingerprint::fingerprint_bytes(bytes, format)
+            }))
+            .unwrap_or_else(|_| Err("fingerprint computation panicked".to_string()));
+
+            let fp = match fp_result {
                 Ok(fp) => fp,
                 Err(e) => {
                     // Decode failure on a format-validated file (HE-AAC m4a, Ogg
