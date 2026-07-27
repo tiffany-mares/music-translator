@@ -27,10 +27,13 @@
       "Resource": "arn:aws:events:__REGION__:__ACCOUNT_ID__:rule/StepFunctionsGetEventsForSageMakerProcessingJobsRule"
     },
     {
-      "Sid": "InvokeTranslateOnly",
+      "Sid": "InvokeOwnLambdasOnly",
       "Effect": "Allow",
       "Action": "lambda:InvokeFunction",
-      "Resource": "arn:aws:lambda:__REGION__:__ACCOUNT_ID__:function:lyralearn-translate"
+      "Resource": [
+        "arn:aws:lambda:__REGION__:__ACCOUNT_ID__:function:lyralearn-translate",
+        "arn:aws:lambda:__REGION__:__ACCOUNT_ID__:function:lyralearn-chunk-audio"
+      ]
     }
   ]
 }

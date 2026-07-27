@@ -1,0 +1,144 @@
+{
+  "Comment": "LyraLearn chunked pipeline - Phase 2.4 (section 4's Map fan-out, WITHOUT StitchResults/RunTranslation - those are 2.5). The linear lyralearn-pipeline remains the end-to-end path until then.",
+  "StartAt": "MarkProcessing",
+  "States": {
+    "MarkProcessing": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "LyraLearnTable",
+        "Key": {
+          "PK": { "S.$": "States.Format('SONG#{}', $.songId)" },
+          "SK": { "S.$": "States.Format('JOB#{}', $.jobId)" }
+        },
+        "UpdateExpression": "SET #s = :processing, stage = :stage",
+        "ExpressionAttributeNames": { "#s": "status" },
+        "ExpressionAttributeValues": {
+          ":processing": { "S": "PROCESSING" },
+          ":stage": { "S": "ChunkAudio" }
+        }
+      },
+      "ResultPath": null,
+      "Next": "ChunkAudio"
+    },
+    "ChunkAudio": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "lyralearn-chunk-audio",
+        "Payload": {
+          "songId.$": "$.songId",
+          "bucket": "__BUCKET__",
+          "execName.$": "$$.Execution.Name"
+        }
+      },
+      "ResultSelector": {
+        "chunks.$": "$.Payload.chunks",
+        "chunkCount.$": "$.Payload.chunkCount",
+        "songDurationSeconds.$": "$.Payload.songDurationSeconds"
+      },
+      "ResultPath": "$.chunkResult",
+      "Catch": [ { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" } ],
+      "Next": "ProcessChunksInParallel"
+    },
+    "ProcessChunksInParallel": {
+      "Type": "Map",
+      "ItemsPath": "$.chunkResult.chunks",
+      "MaxConcurrency": __MAX_CONCURRENCY__,
+      "ResultPath": null,
+      "Iterator": {
+        "StartAt": "RunChunkPipeline",
+        "States": {
+          "RunChunkPipeline": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::sagemaker:createProcessingJob.sync",
+            "Comment": "No Retry, same reason as the linear pipeline (notes/phase2.md section 2.3): job names are deterministic, retries self-collide with ResourceInUse.",
+            "Parameters": {
+              "ProcessingJobName.$": "$.jobName",
+              "RoleArn": "arn:aws:iam::__ACCOUNT_ID__:role/lyralearn-sagemaker-processing",
+              "AppSpecification": { "ImageUri": "__ACCOUNT_ID__.dkr.ecr.__REGION__.amazonaws.com/lyralearn-ml:__IMAGE_TAG__" },
+              "Environment": {
+                "SONG_ID.$": "$.songId",
+                "SOURCE_LANGUAGE": "ro",
+                "CHUNK_START_OFFSET.$": "States.Format('{}', $.chunkStartOffset)"
+              },
+              "ProcessingResources": {
+                "ClusterConfig": { "InstanceCount": 1, "InstanceType": "ml.g4dn.xlarge", "VolumeSizeInGB": 50 }
+              },
+              "ProcessingInputs": [
+                {
+                  "InputName": "chunk",
+                  "S3Input": {
+                    "S3Uri.$": "$.inputPrefix",
+                    "LocalPath": "/opt/ml/processing/input",
+                    "S3DataType": "S3Prefix",
+                    "S3InputMode": "File",
+                    "S3DataDistributionType": "FullyReplicated"
+                  }
+                }
+              ],
+              "ProcessingOutputConfig": {
+                "Outputs": [
+                  {
+                    "OutputName": "chunk-output",
+                    "S3Output": {
+                      "S3Uri.$": "$.outputPrefix",
+                      "LocalPath": "/opt/ml/processing/output",
+                      "S3UploadMode": "EndOfJob"
+                    }
+                  }
+                ]
+              },
+              "StoppingCondition": { "MaxRuntimeInSeconds": 3600 }
+            },
+            "End": true
+          }
+        }
+      },
+      "Catch": [ { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" } ],
+      "Next": "MarkComplete"
+    },
+    "MarkComplete": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "LyraLearnTable",
+        "Key": {
+          "PK": { "S.$": "States.Format('SONG#{}', $.songId)" },
+          "SK": { "S.$": "States.Format('JOB#{}', $.jobId)" }
+        },
+        "UpdateExpression": "SET #s = :complete, chunkCount = :cc, stageOutputs = :outputs",
+        "ExpressionAttributeNames": { "#s": "status" },
+        "ExpressionAttributeValues": {
+          ":complete": { "S": "COMPLETE" },
+          ":cc": { "N.$": "States.Format('{}', $.chunkResult.chunkCount)" },
+          ":outputs": {
+            "M": {
+              "chunksPrefix": { "S.$": "States.Format('songs/{}/chunks/{}/', $.songId, $$.Execution.Name)" },
+              "mlOutputPrefix": { "S.$": "States.Format('songs/{}/ml-output/{}/', $.songId, $$.Execution.Name)" }
+            }
+          }
+        }
+      },
+      "End": true
+    },
+    "MarkFailed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "LyraLearnTable",
+        "Key": {
+          "PK": { "S.$": "States.Format('SONG#{}', $.songId)" },
+          "SK": { "S.$": "States.Format('JOB#{}', $.jobId)" }
+        },
+        "UpdateExpression": "SET #s = :failed, errorInfo = :err",
+        "ExpressionAttributeNames": { "#s": "status" },
+        "ExpressionAttributeValues": {
+          ":failed": { "S": "FAILED" },
+          ":err": { "S.$": "States.Format('{}: {}', $.error.Error, $.error.Cause)" }
+        }
+      },
+      "End": true
+    }
+  }
+}
