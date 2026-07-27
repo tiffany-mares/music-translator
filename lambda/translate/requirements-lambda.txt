@@ -1,0 +1,11 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+# +cpu wheel exists only on the pytorch index - keeps the CUDA stack (~2.5 GB) out of a CPU-only Lambda
+torch==2.3.0+cpu
+transformers==4.41.0
+# transformers' loose numpy>=1.17 resolves to numpy 2.x, which has no wheel the
+# Lambda base image's pip accepts (tries a meson source build with no compiler).
+# Same pin as requirements.txt and the ML container.
+numpy==1.26.4
+sentencepiece==0.2.0
+sacremoses==0.1.1
+boto3==1.34.131
