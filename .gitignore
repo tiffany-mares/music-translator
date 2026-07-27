@@ -8,6 +8,9 @@ test_data/*
 !test_data/.gitkeep
 output/
 
+# Rendered infra templates (account-specific values filled in at deploy time)
+infra/aws/*.filled.json
+
 # OS
 .DS_Store
 Thumbs.db

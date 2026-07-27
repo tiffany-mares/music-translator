@@ -1,0 +1,123 @@
+{
+  "Comment": "LyraLearn song pipeline - Phase 2.3 linear (pre-chunking) form of architecture.md section 4",
+  "StartAt": "MarkProcessing",
+  "States": {
+    "MarkProcessing": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "LyraLearnTable",
+        "Key": {
+          "PK": { "S.$": "States.Format('SONG#{}', $.songId)" },
+          "SK": { "S.$": "States.Format('JOB#{}', $.jobId)" }
+        },
+        "UpdateExpression": "SET #s = :processing, stage = :stage",
+        "ExpressionAttributeNames": { "#s": "status" },
+        "ExpressionAttributeValues": {
+          ":processing": { "S": "PROCESSING" },
+          ":stage": { "S": "RunMLPipeline" }
+        }
+      },
+      "ResultPath": null,
+      "Next": "RunMLPipeline"
+    },
+    "RunMLPipeline": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sagemaker:createProcessingJob.sync",
+      "Parameters": {
+        "ProcessingJobName.$": "States.Format('lyralearn-sfn-{}', $$.Execution.Name)",
+        "RoleArn": "arn:aws:iam::__ACCOUNT_ID__:role/lyralearn-sagemaker-processing",
+        "AppSpecification": { "ImageUri": "__ACCOUNT_ID__.dkr.ecr.__REGION__.amazonaws.com/lyralearn-ml:__IMAGE_TAG__" },
+        "Environment": { "SONG_ID.$": "$.songId", "SOURCE_LANGUAGE": "ro" },
+        "ProcessingResources": {
+          "ClusterConfig": { "InstanceCount": 1, "InstanceType": "ml.g4dn.xlarge", "VolumeSizeInGB": 50 }
+        },
+        "ProcessingInputs": [
+          {
+            "InputName": "song",
+            "S3Input": {
+              "S3Uri.$": "States.Format('s3://__BUCKET__/songs/{}/raw/', $.songId)",
+              "LocalPath": "/opt/ml/processing/input",
+              "S3DataType": "S3Prefix",
+              "S3InputMode": "File",
+              "S3DataDistributionType": "FullyReplicated"
+            }
+          }
+        ],
+        "ProcessingOutputConfig": {
+          "Outputs": [
+            {
+              "OutputName": "ml-output",
+              "S3Output": {
+                "S3Uri.$": "States.Format('s3://__BUCKET__/songs/{}/ml-output/{}/', $.songId, $$.Execution.Name)",
+                "LocalPath": "/opt/ml/processing/output",
+                "S3UploadMode": "EndOfJob"
+              }
+            }
+          ]
+        },
+        "StoppingCondition": { "MaxRuntimeInSeconds": 7200 }
+      },
+      "ResultPath": "$.mlResult",
+      "Retry": [ { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 30, "MaxAttempts": 2, "BackoffRate": 2.0 } ],
+      "Catch": [ { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" } ],
+      "Next": "RunTranslation"
+    },
+    "RunTranslation": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "lyralearn-translate",
+        "Payload": {
+          "songId.$": "$.songId",
+          "bucket": "__BUCKET__",
+          "transcriptKey.$": "States.Format('songs/{}/ml-output/{}/transcript.json', $.songId, $$.Execution.Name)"
+        }
+      },
+      "ResultPath": "$.translation",
+      "Catch": [ { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" } ],
+      "Next": "MarkComplete"
+    },
+    "MarkComplete": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "LyraLearnTable",
+        "Key": {
+          "PK": { "S.$": "States.Format('SONG#{}', $.songId)" },
+          "SK": { "S.$": "States.Format('JOB#{}', $.jobId)" }
+        },
+        "UpdateExpression": "SET #s = :complete, stageOutputs = :outputs",
+        "ExpressionAttributeNames": { "#s": "status" },
+        "ExpressionAttributeValues": {
+          ":complete": { "S": "COMPLETE" },
+          ":outputs": {
+            "M": {
+              "mlOutputPrefix": { "S.$": "States.Format('songs/{}/ml-output/{}/', $.songId, $$.Execution.Name)" },
+              "lyricsKey": { "S.$": "$.translation.Payload.lyricsKey" }
+            }
+          }
+        }
+      },
+      "End": true
+    },
+    "MarkFailed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "LyraLearnTable",
+        "Key": {
+          "PK": { "S.$": "States.Format('SONG#{}', $.songId)" },
+          "SK": { "S.$": "States.Format('JOB#{}', $.jobId)" }
+        },
+        "UpdateExpression": "SET #s = :failed, errorInfo = :err",
+        "ExpressionAttributeNames": { "#s": "status" },
+        "ExpressionAttributeValues": {
+          ":failed": { "S": "FAILED" },
+          ":err": { "S.$": "States.Format('{}: {}', $.error.Error, $.error.Cause)" }
+        }
+      },
+      "End": true
+    }
+  }
+}
