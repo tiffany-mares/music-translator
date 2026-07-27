@@ -1,0 +1,16 @@
+# Section 5.3 pins - verbatim from architecture.md
+demucs==4.0.1
+faster-whisper==1.0.3
+basic-pitch==0.3.3
+# ctranslate2 >= 4.5 requires cuDNN 9; the pinned base image ships cuDNN 8
+# (…-cudnn8-runtime), so GPU transcription segfaults/fails to load without this cap.
+ctranslate2==4.3.1
+# Match the Phase 1 local environment where it affects output or I/O
+soundfile==0.12.1
+numpy==1.26.4
+# faster-whisper 1.0.3 imports requests but doesn't declare it (same note as requirements.txt)
+requests==2.34.2
+pretty_midi==0.2.10
+librosa==0.10.2
+# pretty_midi 0.2.10 needs pkg_resources (removed in setuptools 82) - same pin note as requirements.txt
+setuptools==65.5.1
