@@ -78,3 +78,51 @@ def test_handler_requires_event_keys(monkeypatch):
         assert False, "expected KeyError"
     except KeyError:
         pass
+
+
+class FakeCollection:
+    def __init__(self, fail=False):
+        self.fail = fail
+        self.calls = []
+
+    def replace_one(self, flt, doc, upsert=False):
+        if self.fail:
+            raise RuntimeError("atlas down")
+        self.calls.append((flt, doc, upsert))
+
+
+def _wire_mongo(monkeypatch, coll):
+    monkeypatch.setattr(handler_mod, "MONGODB_SECRET_ARN", "arn:fake")
+    monkeypatch.setattr(handler_mod, "_mongo",
+                        lambda: {handler_mod.MONGO_DB: {handler_mod.MONGO_COLLECTION: coll}})
+
+
+def test_dual_write_upserts_the_same_6_2_doc_keyed_on_song_id(monkeypatch):
+    fake_s3 = FakeS3(_transcript())
+    _wire(monkeypatch, fake_s3)
+    coll = FakeCollection()
+    _wire_mongo(monkeypatch, coll)
+    result = handler_mod.handler(
+        {"songId": "test-song-001", "bucket": "b", "transcriptKey": "k"}, None)
+    assert result == {"lyricsKey": "songs/test-song-001/lyrics/song_lyrics.json", "lineCount": 1}
+    (flt, doc, upsert), = coll.calls
+    assert flt == {"songId": "test-song-001"} and upsert is True
+    assert doc == json.loads(fake_s3.put_calls[0]["Body"].decode("utf-8"))
+
+
+def test_mongo_failure_is_best_effort_and_never_fails_the_pipeline(monkeypatch):
+    fake_s3 = FakeS3(_transcript())
+    _wire(monkeypatch, fake_s3)
+    _wire_mongo(monkeypatch, FakeCollection(fail=True))
+    result = handler_mod.handler({"songId": "s", "bucket": "b", "transcriptKey": "k"}, None)
+    assert result["lyricsKey"] == "songs/s/lyrics/song_lyrics.json"
+    assert fake_s3.put_calls  # S3 write of record is intact
+
+
+def test_no_secret_configured_skips_mongo_entirely(monkeypatch):
+    fake_s3 = FakeS3(_transcript())
+    _wire(monkeypatch, fake_s3)
+    monkeypatch.setattr(handler_mod, "MONGODB_SECRET_ARN", "")
+    monkeypatch.setattr(handler_mod, "_mongo",
+                        lambda: (_ for _ in ()).throw(AssertionError("must not construct client")))
+    assert handler_mod.handler({"songId": "s", "bucket": "b", "transcriptKey": "k"}, None)["lineCount"] == 1

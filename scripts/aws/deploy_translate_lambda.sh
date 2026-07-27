@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Phase 2.3: build + push the RunTranslation Lambda image and create/update the function.
+# Phase 3.5: build + push the RunTranslation Lambda image and create/update the function.
 # Usage: AWS_REGION=... ACCOUNT_ID=... BUCKET=... scripts/aws/deploy_translate_lambda.sh
 set -euo pipefail
 : "${AWS_REGION:?}" "${ACCOUNT_ID:?}" "${BUCKET:?}"
 
 FN=lyralearn-translate
-URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/lyralearn-translate:2.3"
+URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/lyralearn-translate:3.5"
 
 aws ecr create-repository --repository-name lyralearn-translate --region "$AWS_REGION" >/dev/null 2>&1 || true
 aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-docker build --platform linux/amd64 -f lambda/translate/Dockerfile -t lyralearn-translate:2.3 .
-docker tag lyralearn-translate:2.3 "$URI"
+docker build --platform linux/amd64 -f lambda/translate/Dockerfile -t lyralearn-translate:3.5 .
+docker tag lyralearn-translate:3.5 "$URI"
 docker push "$URI"
 
 aws iam create-role --role-name lyralearn-lambda-translate \
