@@ -86,3 +86,41 @@ PASS - Phase 3.3 done-when met.
 The last line is the §10 clause measured, not assumed: execution counts on both state machines captured before/after all three cases. When 3.5 wires the pass-path to SFN, the malformed cases must STILL show zero new executions.
 
 **Verdict:** 3.3 done. Next: 3.4 (chromaprint fingerprinting + GSI3 dedup in this same Lambda).
+
+## 3.4 — Fingerprint dedup
+
+**Date:** 2026-07-27
+**Function:** same `lyralearn-validate` Lambda (Rust) as 3.3 — fingerprinting is an added step in the existing hot path, not a new function. Stack: `rusty-chromaprint` 0.3.0 (`Configuration::preset_test2()`, chromaprint's own `ALGORITHM_DEFAULT`/fpcalc default, with internal resample+downmix) decoding via `symphonia` 0.5.x (`mp3`, `aac`, `isomp4`, `alac` features); fingerprints only the first 120 s of audio (`MAX_FINGERPRINT_SECONDS`, AcoustID convention, bounds CPU). A zero-channel guard was added post-review (a malformed-but-probeable file reporting zero decoded channels would otherwise panic on the sample-count divide) — returns a graceful `Err` instead of a Lambda 500. Zip grew to 5.8 MB (was 5.2 MB in 3.3, +~0.6 MB for symphonia/rubato/rusty-chromaprint's transitive deps).
+
+**Two-stage dedup design:** `GSI3PK = FP1#<simhash32 hex>` is an exact-match candidate filter on GSI3 (the `FP1#` prefix is versioned so a future fingerprint-algorithm change can't collide with old entries); candidates are then verified acoustically via `match_fingerprints` (score ≤ 10, coverage ≥ 0.8 — both left at the brief's original defaults; the load-bearing `reencode_same_simhash_key` test passed on the first GREEN run with no threshold tuning and no need for the banded-LSH fallback). A simhash collision without acoustic agreement is harmless: the candidate is rejected by verification and the upload proceeds as a new song — a duplicate (cost) pipeline run, not a corruption. The banded-LSH fallback (4 time-banded keys `FP2B{n}#<hex>`, union candidates, same verification) stays documented in the plan for if `FP1` keys ever prove unstable in production; not needed for this phase.
+
+**§6.1 attributes added (additive):** `GSI3PK`, `fpFull` (Binary, little-endian u32 fingerprint blob), `fpSeconds` (N, from `config().item_duration_in_seconds()`), `linkedSongId`, status value `LINKED`. LINKED items never carry `GSI3PK` — the index stays canonical on the original only, so link chains can't form (confirmed independently in Task 6's DynamoDB scan: two separate re-uploads of the "same new song" and two separate re-encodes all resolved `linkedSongId` back to the one true canonical original, not to each other). `audioKeys` is copied to the linked item only when the original already has it, avoiding 404s on `/audio-urls` for songs uploaded before that map existed.
+
+**Degradation decision:** if a format-validated file fails to fingerprint/decode, the song is written `VALIDATED` with no dedup rather than rejected. This is exercised in practice, not theoretical: HE-AAC `.m4a` and Ogg Opus files can't decode under symphonia 0.5's enabled feature set. Deliberate — §11's false-positive caution favors under-linking (worst case: a duplicate reprocesses through the pipeline) over blocking a validly-formatted upload on a decode gap.
+
+**Auto-link decision:** §11 raised "manual review before auto-linking" as a caution on chromaprint's false-positive risk (e.g. two different live recordings of the same song). Resolved here in favor of auto-link guarded by acoustic verification (never raw fingerprint/simhash equality alone), because §10's done-when requires the second upload to link to the first without any human intervention. The score/coverage thresholds are the guard against the exact false-positive scenario §11 raised.
+
+**Lambda config:** bumped 128 MB → 1024 MB / 30 s via Terraform (plan-guarded `0 to add / 2 to change / 0 to destroy`, applied by the user) to give the decode+fingerprint step headroom; the 29 s API Gateway integration-timeout ceiling is why 30 s was chosen rather than higher. Measured CloudWatch REPORT lines at the deployed config: cold start (song A, first fingerprint of the session, includes the ~3.4 MB decode + chromaprint + init) 883.53 ms (Init 81.74 ms), warm invocations 52–599 ms, max memory used peaked at 49 MB against the 1024 MB provisioned. Both numbers are well under the ~8 s warm-duration concern threshold, so no follow-up bump to 1769 MB is warranted.
+
+**3.5 race noted:** GSI3 is eventually consistent, so two near-simultaneous uploads of the same genuinely-new song can both miss the dedup check and both run the full pipeline — a cost duplication (both still write valid, independent results), not a data-correctness bug. Left for 3.5 to weigh, not addressed here.
+
+**Gate-script decisions (`scripts/verify_3_4.sh`):**
+- **Windows-curl ASCII-copy workaround:** the mingw `curl.exe` on this dev machine (8.21.0, Git Bash) can't open the accented fixture path (`Trenulețul - Zdob și Zdub (128k).mp3`) for `--upload-file` regardless of codepage/locale settings. The song-C (different-song control) step now `cp`s the fixture to an ASCII temp name before the PUT and removes it after, mirroring the script's existing `bad_upload.bin` pattern, instead of renaming the fixture repo-wide.
+- **Idempotency pre-cleanup:** before capturing the BEFORE_LINEAR/BEFORE_CHUNKED Step Functions execution counts, the script now scans `LyraLearnTable` for items whose `GSI3PK` begins `FP1#` and issues `REMOVE GSI3PK` on each, de-indexing prior runs' fingerprints so a re-run's "song A" genuinely validates as new again rather than legitimately (and confusingly) linking to itself. Proved: two consecutive full runs of the committed script produced byte-identical `PASS` output.
+
+**Done-when (`scripts/verify_3_4.sh`, post-fix committed script, unattended run):**
+```
+original: accepted, not linked
+original: status VALIDATED
+original: GSI3PK written
+original: fpFull stored
+re-encoded dup: linkedSongId == original
+re-encoded dup: status LINKED
+re-encoded dup: no GSI3PK (index stays canonical)
+different song: VALIDATED, not linked
+garbage upload: still rejected 400/REJECTED
+Step Functions: zero new executions (before/after 5/5 linear, 2/2 chunked)
+PASS - Phase 3.4 done-when met.
+```
+
+**Verdict:** 3.4 done. Next: 3.5 (Step Functions pass-path wiring + the BINDING MongoDB migration). Phase 2.6 remains parked at the quota-6 gate.
