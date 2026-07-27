@@ -150,3 +150,58 @@ resource "aws_lambda_permission" "apigw" {
 }
 
 output "api_endpoint" { value = aws_apigatewayv2_api.http.api_endpoint }
+
+# ---- Phase 3.3: Rust validation Lambda on POST /songs/{id}/process ----
+
+resource "aws_iam_role" "validate" {
+  name               = "lyralearn-lambda-validate"
+  assume_role_policy = file("${path.module}/../../../infra/aws/lambda-trust.json")
+}
+
+resource "aws_iam_role_policy" "validate" {
+  name = "lyralearn-validate-scoped"
+  role = aws_iam_role.validate.id
+  policy = replace(replace(replace(
+    file("${path.module}/../../../infra/aws/lambda-validate-policy.json"),
+  "__BUCKET__", var.audio_bucket), "__REGION__", var.region), "__ACCOUNT_ID__", var.account_id)
+}
+
+resource "aws_lambda_function" "validate" {
+  function_name    = "lyralearn-validate"
+  runtime          = "provided.al2023"
+  handler          = "bootstrap"
+  filename         = "${path.module}/../../../lambda/validate/target/lambda/bootstrap/bootstrap.zip"
+  source_code_hash = filebase64sha256("${path.module}/../../../lambda/validate/target/lambda/bootstrap/bootstrap.zip")
+  role             = aws_iam_role.validate.arn
+  timeout          = 10
+  memory_size      = 128
+
+  environment {
+    variables = {
+      AUDIO_BUCKET = var.audio_bucket
+    }
+  }
+}
+
+resource "aws_apigatewayv2_integration" "validate_lambda" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.validate.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "process" {
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = "POST /songs/{id}/process"
+  target             = "integrations/${aws_apigatewayv2_integration.validate_lambda.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+}
+
+resource "aws_lambda_permission" "apigw_validate" {
+  statement_id  = "AllowHttpApiInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.validate.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
