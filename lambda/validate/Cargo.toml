@@ -1,0 +1,23 @@
+[package]
+name = "lyralearn-validate"
+version = "0.1.0"
+edition = "2021"
+# Matches the cargo-lambda image's rustc; with the resolver fallback below,
+# cargo picks the newest AWS SDK crates that still support this toolchain.
+rust-version = "1.93"
+
+[dependencies]
+lambda_http = "0.13"
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-sdk-s3 = "1"
+aws-sdk-dynamodb = "1"
+tokio = { version = "1", features = ["macros"] }
+serde_json = "1"
+
+[[bin]]
+name = "bootstrap"
+path = "src/main.rs"
+
+[profile.release]
+strip = true
+lto = true

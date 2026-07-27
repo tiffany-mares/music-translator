@@ -20,3 +20,4 @@ terraform/.terraform/
 .DS_Store
 Thumbs.db
 terraform/modules/api/api_lambda.zip
+lambda/validate/target/
