@@ -59,7 +59,7 @@
         "StoppingCondition": { "MaxRuntimeInSeconds": 7200 }
       },
       "ResultPath": "$.mlResult",
-      "Retry": [ { "ErrorEquals": ["States.ALL"], "IntervalSeconds": 30, "MaxAttempts": 2, "BackoffRate": 2.0 } ],
+      "Comment": "No Retry, deviating from section 4's sketch: the job name derives from $$.Execution.Name, which is constant across retry attempts - every retry collides with the first attempt's job (ResourceInUse), observed live on 2026-07-27. Retrying a deterministic input failure at GPU prices buys nothing.",
       "Catch": [ { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" } ],
       "Next": "RunTranslation"
     },

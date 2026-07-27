@@ -94,3 +94,30 @@ unauthenticated rate limits); the baked image pulls only from ECR. Update
 38 lines in the 2.1 run, 30 here, same model/precision).
 
 **Verdict:** proceed to Phase 2.3 (already built in parallel — see §2.3).
+
+## 2.3 — Linear Step Functions pipeline
+
+**Date:** 2026-07-27
+**State machine:** arn:aws:states:us-east-1:503233513399:stateMachine:lyralearn-pipeline (STANDARD)
+`MarkProcessing → RunMLPipeline (createProcessingJob.sync, lyralearn-ml:2.2) → RunTranslation (Lambda) → MarkComplete / MarkFailed` — the §4 sketch reduced to its pre-chunking linear form. Mark* states are direct DynamoDB integrations (no Lambda). Deploy: `scripts/aws/deploy_state_machine.sh`; trigger: `scripts/aws/start_pipeline_execution.sh <songId> <jobId>`.
+
+**RunTranslation Lambda** (`lyralearn-translate`, container image, 4096 MB / 300 s): reuses `stages/translate.py`, MarianMT ROMANCE-en baked at `/opt/model`, writes the §6.2 doc to `songs/{songId}/lyrics/song_lyrics.json` (S3 only — MongoDB write is Phase 3's, user decision 2026-07-27). Cold start ≈ 60 s invoke wall (model load); warm invokes seconds. Three Lambda-specific deploy findings: numpy must be pinned 1.26.4 (transformers' loose bound pulls a 2.x sdist the base image can't build), the model must be saved as .bin (safetensors mmap hits a spurious FileNotFoundError on Lambda's lazily-loaded image filesystem), and the image must be pushed as a single v2 manifest (`buildx --provenance=false`) — Lambda rejects OCI attestation indexes.
+
+**The three executions (all in console history):**
+| execution | result | job item |
+|---|---|---|
+| job-quota-probe (pre-approval) | SUCCEEDED via MarkFailed | FAILED, errorInfo=ResourceLimitExceeded — proved the catch wiring before quota existed |
+| job-2-3-green | SUCCEEDED, all four states green | COMPLETE, stageOutputs.{mlOutputPrefix, lyricsKey}; lyrics doc has 38 translated lines |
+| job-2-3-badaudio2 | SUCCEEDED via MarkFailed | FAILED, errorInfo contains SageMaker FailureReason "AlgorithmError: exit code 1" (Demucs cannot decode the garbage file) |
+
+**Done-when met:** green full execution + deliberately-forced bad-audio failure hitting MarkFailed correctly.
+
+**Design finding — §4's Retry on the SageMaker task is unusable as sketched:** the processing-job name derives from `$$.Execution.Name`, which is constant across retry attempts, so every retry collides with the first attempt's job (`ResourceInUseException`, observed live on the first bad-audio run). Removed the Retry (a deterministic input failure shouldn't be retried at GPU prices anyway); revisit if per-attempt-unique naming is ever needed. §4's chunked sketch has the same flaw (name from chunkId) — fix it when building 2.4.
+
+**Semantics note:** a failure-path execution shows green (SUCCEEDED) in the console — MarkFailed is a normal End state; "failed" lives in the job item's `status`, which is what the Phase 6 DynamoDB-Streams push reads. `errorInfo` currently stores the whole DescribeProcessingJob JSON on task failure — verbose; trim to FailureReason in a later phase if it bothers anyone.
+
+**Decisions recorded:** lyrics to S3 only (Phase 3 adds MongoDB); no GSIs on LyraLearnTable yet (API-layer concern); infra stays CLI + JSON templates for Phase 2.
+
+**Terraform commitment (user decision, 2026-07-27):** Phase 3 MUST begin with adopting §7's Terraform layout (orchestration/storage/ml-processing modules), importing the ~14 resources created by CLI in Phases 2.1–2.3 (S3 bucket, ECR repos lyralearn-ml + lyralearn-translate, IAM roles lyralearn-sagemaker-processing + lyralearn-lambda-translate + lyralearn-sfn-pipeline, LyraLearnTable, the translate Lambda, the state machine), and choosing a state backend — do not start Phase 3 API work before this.
+
+**Verdict:** Phase 2.3 done. Next: 2.4 (chunking) — carry the §4 Retry naming fix into the Map-state design.
