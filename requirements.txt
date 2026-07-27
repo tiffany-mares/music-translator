@@ -8,6 +8,8 @@ pytest==8.2.2
 # faster-whisper 1.0.3 imports requests but doesn't declare it; huggingface-hub 1.x no longer pulls it in
 requests==2.34.2
 transformers==4.41.0
+# tests import lambda/translate/handler.py, which uses boto3 (same pin as requirements-lambda.txt)
+boto3==1.34.131
 sentencepiece==0.2.0
 sacremoses==0.1.1
 # setuptools pin: pretty_midi 0.2.10 needs pkg_resources (removed in setuptools 82); versions >=67.5 emit a deprecation warning on import, so <67.5 keeps output clean
