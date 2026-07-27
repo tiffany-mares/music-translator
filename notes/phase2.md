@@ -151,3 +151,25 @@ PASS - all 6 chunks complete with correct chunk_start_offset metadata.
 **Ops note:** the venv's pinned boto3 (1.34.131) cannot resolve the root `aws login` session credentials (provider is newer than the pin) — run boto3 scripts with `eval "$(aws configure export-credentials --profile new-profile-name --format env)"`.
 
 **Verdict:** Phase 2.4 done. Next: 2.5 (StitchResults — crossfade stems at overlaps, offset+merge/dedupe transcript lines and pitch notes by chunkStartOffset, then hook RunTranslation + the §5.4 per-artifact prefixes into the chunked machine).
+
+## 2.5 — StitchResults
+
+**Date:** 2026-07-27
+**Lambda:** `lyralearn-stitch-results` (container image `lyralearn-stitch-results:2.5`, 4096 MB / 300 s): normalized linear overlap-add for stems; midpoint-window dedupe for lines/notes (§5.3a's "simple de-duplication pass" — chunk *i* owns `[offset_i + 1.25, offset_{i+1} + 1.25)`, items survive iff their midpoint is inside). Writes gate-compatible whole-song artifacts to `songs/{songId}/stitched/{execName}/`. Deploy: `scripts/aws/deploy_stitch_lambda.sh`.
+**Pipeline:** `lyralearn-pipeline-chunked` is now the full §4 shape minus fingerprint short-circuit: `MarkProcessing → ChunkAudio → Map → StitchResults → RunTranslation → MarkComplete/Failed` (ASL renamed to `infra/aws/pipeline-chunked.asl.json`). End-to-end run `job-2-5-20260727-034341` SUCCEEDED: job item COMPLETE, chunkCount 6, stageOutputs `{chunksPrefix, mlOutputPrefix, stitchedPrefix, lyricsKey}`; translated lyrics (33 lines, en) produced from the STITCHED transcript.
+
+**Done-when, honestly:**
+- *Clean-boundary condition* — covered by exact-pass-through unit tests on synthetic chunks (user decision 2026-07-27), because measured reality made the spec's easy case impossible: ALL five cut points (38.75/76.25/113.75/151.25/188.75 s) land mid-word (`Și`, `Vrei`, `dat`, `-intresc` ×2).
+- *"Indistinguishable" gate* (`compare_s3_output.py output output/stitched-2.5`): **FAIL — and the failure IS the finding.** Two checks out of tolerance, both traced to chunking quality, not stitch bugs:
+  1. **vocals RMS 0.14196 vs local 0.11295 (+25.7%)** — the stitched RMS exactly equals the average of the raw per-chunk stems (0.129–0.160), and the elevation is uniform across interior regions, not seam-localized. Demucs separates 40 s windows measurably worse than the whole song (more instrumental bleed into vocals). The crossfade is faithful; the cost is upstream.
+  2. **text similarity 0.56** (whole-song GPU run scored 0.71) — chunked Whisper both drifts (less context per 40 s window) and produces seam artifacts. Passing checks: duration (exact), line count 40 vs 35, word count, note count 690 vs 697, median pitch.
+- *Mid-word documentation* (boundary report, all five cuts):
+  - **38.75 s:** real damage — chunk 0 garbled the truncated line ("M-a iachat, m-a iachata" for "Alo, salut, sunt eu un haiduc"'s tail), chunk 1 lost "primește fericirea".
+  - **76.25 s:** clean handoff — both lines intact.
+  - **113.75 s:** duplication — "Picasso, ți-am dat vin" (garbled tail) AND "Toți am dat bip și sunt voinic..." both kept: differently-segmented long lines straddling the cut defeat the midpoint rule (the predicted long-line seam weakness, observed live).
+  - **151.25 s:** chunked is BETTER here — the whole-song run had a degenerate 30 s "line"; chunks produced real chorus segmentation.
+  - **188.75 s:** duplication again ("Chipul tău și dragostea din..." ×2, one truncated).
+
+**Conclusion — §5.3's tradeoff verified, not assumed:** on a song with continuous vocals, chunked+stitched output is measurably distinguishable from whole-song output: ~+25% vocal-stem bleed (uniform demucs cost), transcription similarity 0.71→0.56, seam duplicates at 2 of 5 boundaries, 1 boundary improved. The stitcher itself is correct (unit-exact on clean seams, faithful on real data). These numbers feed §11's open overlap-duration knob and 2.6's judgment on whether the wall-clock win justifies the quality cost; options if quality must improve: longer overlap, seam-aware text merging (align words in the overlap rather than midpoint ownership), or chunking only demucs and running whisper on the stitched vocals.
+
+**Verdict:** Phase 2.5 done (engineering verified; quality tradeoff quantified and documented). Next: 2.6 (end-to-end timing validation — needs the quota-6 request, still blocked behind the open 0→1 case).
