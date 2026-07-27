@@ -9,9 +9,10 @@ URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/lyralearn-translate:3.5"
 
 aws ecr create-repository --repository-name lyralearn-translate --region "$AWS_REGION" >/dev/null 2>&1 || true
 aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-docker build --platform linux/amd64 -f lambda/translate/Dockerfile -t lyralearn-translate:3.5 .
-docker tag lyralearn-translate:3.5 "$URI"
-docker push "$URI"
+# --provenance=false: Lambda rejects OCI attestation indexes (Phase 2.3 finding;
+# bit this script at 3.5 when plain docker build started emitting OCI manifests)
+docker buildx build --platform linux/amd64 --provenance=false --sbom=false \
+  -f lambda/translate/Dockerfile -t "$URI" --push .
 
 aws iam create-role --role-name lyralearn-lambda-translate \
   --assume-role-policy-document file://infra/aws/lambda-trust.json >/dev/null 2>&1 || true
