@@ -31,6 +31,12 @@
       "Effect": "Allow",
       "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
       "Resource": "arn:aws:logs:__REGION__:__ACCOUNT_ID__:log-group:/aws/lambda/lyralearn-validate*"
+    },
+    {
+      "Sid": "StartChunkedPipelineOnly",
+      "Effect": "Allow",
+      "Action": "states:StartExecution",
+      "Resource": "arn:aws:states:__REGION__:__ACCOUNT_ID__:stateMachine:lyralearn-pipeline-chunked"
     }
   ]
 }
