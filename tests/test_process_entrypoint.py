@@ -53,7 +53,19 @@ def test_write_outputs_threads_song_id_through_every_file(tmp_path):
     assert pitch["songId"] == "test-song-001"
     assert pitch["notes"][0]["pitch"] == 60
 
+    assert transcript["chunkStartOffset"] == 0.0
+    assert pitch["chunkStartOffset"] == 0.0
+
     timings = json.loads((tmp_path / "timings.json").read_text(encoding="utf-8"))
     assert timings["demucs"] == 1.0
 
     assert (tmp_path / "melody.mid").exists()
+
+
+def test_write_outputs_records_chunk_start_offset(tmp_path):
+    process.write_outputs(_fake_result(), tmp_path, song_id="s", source_language="ro",
+                          chunk_start_offset=37.5)
+    transcript = json.loads((tmp_path / "transcript.json").read_text(encoding="utf-8"))
+    pitch = json.loads((tmp_path / "pitch.json").read_text(encoding="utf-8"))
+    assert transcript["chunkStartOffset"] == 37.5
+    assert pitch["chunkStartOffset"] == 37.5

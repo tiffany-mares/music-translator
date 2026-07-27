@@ -1,4 +1,4 @@
-"""SageMaker Processing Job entrypoint (Phase 2.1 - whole song, one job, no chunking).
+"""SageMaker Processing Job entrypoint (Phases 2.1-2.4 - whole song OR one chunk per job).
 
 SageMaker downloads the ProcessingInput to /opt/ml/processing/input before this
 runs, and uploads everything under /opt/ml/processing/output to S3 at job end
@@ -30,7 +30,8 @@ def find_input_song(input_dir: Path) -> Path:
     return candidates[0]
 
 
-def write_outputs(result: dict, output_dir: Path, song_id: str, source_language: str) -> None:
+def write_outputs(result: dict, output_dir: Path, song_id: str, source_language: str,
+                  chunk_start_offset: float = 0.0) -> None:
     output_dir = Path(output_dir)
 
     def dump(name: str, payload: dict) -> None:
@@ -39,8 +40,10 @@ def write_outputs(result: dict, output_dir: Path, song_id: str, source_language:
         )
 
     dump("transcript.json", {"songId": song_id, "sourceLanguage": source_language,
+                             "chunkStartOffset": chunk_start_offset,
                              "lines": result["lines"]})
-    dump("pitch.json", {"songId": song_id, "notes": result["pitch_data"]["notes"]})
+    dump("pitch.json", {"songId": song_id, "chunkStartOffset": chunk_start_offset,
+                        "notes": result["pitch_data"]["notes"]})
     dump("timings.json", result["timings"])
     save_midi(result["pitch_data"]["midi"], str(output_dir / "melody.mid"))
 
@@ -50,6 +53,8 @@ def main() -> None:
     output_dir = Path(os.environ.get("SM_OUTPUT_DIR", "/opt/ml/processing/output"))
     song_id = os.environ.get("SONG_ID", "unknown-song")
     source_language = os.environ.get("SOURCE_LANGUAGE", "ro")
+    # 0.0 for whole-song (linear pipeline) jobs; the chunked Map sets it per chunk
+    chunk_start_offset = float(os.environ.get("CHUNK_START_OFFSET", "0"))
 
     song = find_input_song(input_dir)
     print(f"Processing {song.name} as songId={song_id} (language={source_language})")
@@ -58,7 +63,7 @@ def main() -> None:
     result = run_ml_stages(str(song), output_dir, source_language=source_language)
     result["timings"]["total"] = time.perf_counter() - t0
 
-    write_outputs(result, output_dir, song_id, source_language)
+    write_outputs(result, output_dir, song_id, source_language, chunk_start_offset)
     print(f"Done. Timings: {json.dumps(result['timings'], indent=2)}")
 
 
