@@ -65,3 +65,24 @@ Seed data was almost entirely REAL pipeline output (job item `job-2-5`, translat
 **Finding:** boto3's default S3 client emitted legacy SigV2 presigned URLs (functional, non-standard) — the handler forces `signature_version="s3v4"`. Also note the HTTP API JWT authorizer validates ID tokens (`aud` claim); Cognito ACCESS tokens carry `client_id` instead and get 401 — use IdToken in clients.
 
 **Verdict:** 3.2 done. Next: 3.3 (Rust validation Lambda). Phase 2.6 still parked at the quota gate.
+
+## 3.3 — Rust validation Lambda
+
+**Date:** 2026-07-27
+**Function:** `lyralearn-validate` — Rust on `provided.al2023` (zip 5.2 MB, 128 MB memory), route `POST /songs/{id}/process` behind the existing JWT authorizer. **No Rust toolchain on the host**: built inside `ghcr.io/cargo-lambda/cargo-lambda` (`scripts/build_validate_lambda.sh`); the image's rustc (1.93) lags the newest AWS SDK crates' MSRV, solved with `rust-version = "1.93"` + the `incompatible-rust-versions = "fallback"` resolver setting.
+
+**Validation rules:** size 50 KB–25 MB; magic-byte format detection (ranged S3 GET, bytes 0–11) for the ML container's five formats — mp3 (ID3 or MPEG frame sync), wav (RIFF/WAVE), flac, ogg, m4a (ftyp). Verdicts land on the METADATA item: `status=VALIDATED` + `audioFormat`, or `status=REJECTED` + `rejectionReason` (attributes additive to §6.1, recorded). **Deliberately does NOT start Step Functions** — 3.4 adds fingerprinting into this same function (§5.2a), 3.5 wires the pass-path to the pipeline.
+
+**Done-when (`scripts/verify_3_3.sh`):**
+```
+valid mp3: accepted (format=mp3)
+valid mp3: status VALIDATED
+garbage upload: rejected 400 (header check)
+garbage upload: status REJECTED
+missing upload: rejected
+Step Functions: zero new executions (before/after 5/5 linear, 2/2 chunked)
+PASS - Phase 3.3 done-when met.
+```
+The last line is the §10 clause measured, not assumed: execution counts on both state machines captured before/after all three cases. When 3.5 wires the pass-path to SFN, the malformed cases must STILL show zero new executions.
+
+**Verdict:** 3.3 done. Next: 3.4 (chromaprint fingerprinting + GSI3 dedup in this same Lambda).
