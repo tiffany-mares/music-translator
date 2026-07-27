@@ -17,3 +17,5 @@ setuptools==65.5.1
 basic-pitch==0.3.3
 pretty_midi==0.2.10
 librosa==0.10.2
+pymongo==4.8.0
+dnspython==2.6.1
