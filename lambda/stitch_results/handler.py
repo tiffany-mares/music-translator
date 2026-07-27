@@ -22,6 +22,17 @@ import numpy as np
 CHUNK_SECONDS = 40.0
 OVERLAP_SECONDS = 2.5
 
+# Matches the historical demucs output layout the seed data uses; consumers
+# (WriteAudioKeys in the ASL) take these EXPLICIT keys instead of guessing it.
+STEM_SUBDIR = "stems/htdemucs/input_song/"
+
+
+def artifact_keys(prefix: str) -> dict:
+    return {"stitchedPrefix": prefix,
+            "transcriptKey": prefix + "transcript.json",
+            "vocalsKey": prefix + STEM_SUBDIR + "vocals.wav",
+            "noVocalsKey": prefix + STEM_SUBDIR + "no_vocals.wav"}
+
 
 def stitch_audio(chunks: list, offsets_samples: list, total_samples: int,
                  overlap_samples: int) -> "np.ndarray":
@@ -176,8 +187,7 @@ def handler(event, context):
         stitched = stitch_audio(arrays, offsets_samples, total_samples, overlap_samples)
         sf.write("/tmp/stitched.wav", stitched, sr, subtype="PCM_16")
         _s3().upload_file("/tmp/stitched.wav", bucket,
-                          prefix + f"stems/htdemucs/input_song/{stem}.wav")
+                          prefix + STEM_SUBDIR + f"{stem}.wav")
 
     print(f"stitched {len(items)} chunks: {len(lines)} lines, {len(notes)} notes")
-    return {"stitchedPrefix": prefix, "transcriptKey": prefix + "transcript.json",
-            "lineCount": len(lines), "noteCount": len(notes)}
+    return {**artifact_keys(prefix), "lineCount": len(lines), "noteCount": len(notes)}

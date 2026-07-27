@@ -83,3 +83,11 @@ def test_build_midi_round_trip():
     assert len(midi.instruments) == 1
     note = midi.instruments[0].notes[0]
     assert (note.pitch, note.velocity) == (60, 63)
+
+
+def test_artifact_keys_point_at_the_written_stem_paths():
+    keys = stitch.artifact_keys("songs/s1/stitched/exec-1/")
+    assert keys["stitchedPrefix"] == "songs/s1/stitched/exec-1/"
+    assert keys["transcriptKey"] == "songs/s1/stitched/exec-1/transcript.json"
+    assert keys["vocalsKey"] == "songs/s1/stitched/exec-1/stems/htdemucs/input_song/vocals.wav"
+    assert keys["noVocalsKey"] == "songs/s1/stitched/exec-1/stems/htdemucs/input_song/no_vocals.wav"
