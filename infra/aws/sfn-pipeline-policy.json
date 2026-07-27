@@ -32,7 +32,8 @@
       "Action": "lambda:InvokeFunction",
       "Resource": [
         "arn:aws:lambda:__REGION__:__ACCOUNT_ID__:function:lyralearn-translate",
-        "arn:aws:lambda:__REGION__:__ACCOUNT_ID__:function:lyralearn-chunk-audio"
+        "arn:aws:lambda:__REGION__:__ACCOUNT_ID__:function:lyralearn-chunk-audio",
+        "arn:aws:lambda:__REGION__:__ACCOUNT_ID__:function:lyralearn-stitch-results"
       ]
     }
   ]

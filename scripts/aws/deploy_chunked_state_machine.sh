@@ -20,16 +20,16 @@ aws iam put-role-policy --role-name "$ROLE" \
 
 sed -e "s/__BUCKET__/$BUCKET/g" -e "s/__REGION__/$AWS_REGION/g" -e "s/__ACCOUNT_ID__/$ACCOUNT_ID/g" \
     -e "s/__IMAGE_TAG__/$IMAGE_TAG/g" -e "s/__MAX_CONCURRENCY__/$MAX_CONCURRENCY/g" \
-  infra/aws/pipeline-2.4-chunked.asl.json > infra/aws/pipeline-2.4-chunked.filled.json
+  infra/aws/pipeline-chunked.asl.json > infra/aws/pipeline-chunked.filled.json
 
 if aws stepfunctions describe-state-machine --state-machine-arn "$SM_ARN" --region "$AWS_REGION" >/dev/null 2>&1; then
   aws stepfunctions update-state-machine --state-machine-arn "$SM_ARN" \
-    --definition file://infra/aws/pipeline-2.4-chunked.filled.json \
+    --definition file://infra/aws/pipeline-chunked.filled.json \
     --role-arn "arn:aws:iam::$ACCOUNT_ID:role/$ROLE" --region "$AWS_REGION" >/dev/null
   echo "updated: $SM_ARN"
 else
   aws stepfunctions create-state-machine --name "$SM_NAME" --type STANDARD \
-    --definition file://infra/aws/pipeline-2.4-chunked.filled.json \
+    --definition file://infra/aws/pipeline-chunked.filled.json \
     --role-arn "arn:aws:iam::$ACCOUNT_ID:role/$ROLE" --region "$AWS_REGION" \
     --query stateMachineArn --output text
 fi

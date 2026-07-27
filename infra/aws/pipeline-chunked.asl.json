@@ -1,5 +1,5 @@
 {
-  "Comment": "LyraLearn chunked pipeline - Phase 2.4 (section 4's Map fan-out, WITHOUT StitchResults/RunTranslation - those are 2.5). The linear lyralearn-pipeline remains the end-to-end path until then.",
+  "Comment": "LyraLearn chunked pipeline - full section 4 shape minus fingerprint short-circuit: MarkProcessing -> ChunkAudio -> Map -> StitchResults -> RunTranslation -> MarkComplete/Failed",
   "StartAt": "MarkProcessing",
   "States": {
     "MarkProcessing": {
@@ -96,6 +96,40 @@
         }
       },
       "Catch": [ { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" } ],
+      "Next": "StitchResults"
+    },
+    "StitchResults": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "lyralearn-stitch-results",
+        "Payload": {
+          "songId.$": "$.songId",
+          "bucket": "__BUCKET__",
+          "execName.$": "$$.Execution.Name"
+        }
+      },
+      "ResultSelector": {
+        "stitchedPrefix.$": "$.Payload.stitchedPrefix",
+        "transcriptKey.$": "$.Payload.transcriptKey"
+      },
+      "ResultPath": "$.stitch",
+      "Catch": [ { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" } ],
+      "Next": "RunTranslation"
+    },
+    "RunTranslation": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "lyralearn-translate",
+        "Payload": {
+          "songId.$": "$.songId",
+          "bucket": "__BUCKET__",
+          "transcriptKey.$": "$.stitch.transcriptKey"
+        }
+      },
+      "ResultPath": "$.translation",
+      "Catch": [ { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" } ],
       "Next": "MarkComplete"
     },
     "MarkComplete": {
@@ -115,7 +149,9 @@
           ":outputs": {
             "M": {
               "chunksPrefix": { "S.$": "States.Format('songs/{}/chunks/{}/', $.songId, $$.Execution.Name)" },
-              "mlOutputPrefix": { "S.$": "States.Format('songs/{}/ml-output/{}/', $.songId, $$.Execution.Name)" }
+              "mlOutputPrefix": { "S.$": "States.Format('songs/{}/ml-output/{}/', $.songId, $$.Execution.Name)" },
+              "stitchedPrefix": { "S.$": "$.stitch.stitchedPrefix" },
+              "lyricsKey": { "S.$": "$.translation.Payload.lyricsKey" }
             }
           }
         }
