@@ -60,3 +60,37 @@ PASS - SageMaker output matches Phase 1 local output within tolerances.
 - transcript.json carries `translatedText: null` — translation stays in the RunTranslation Lambda (§4), so "matches Phase 1" was checked on originalText/timings/words/stems/notes.
 
 **Verdict:** proceed to Phase 2.2 (its image is already built/pushed as :2.2 with the same two env fixes merged).
+
+## 2.2 — Bake model weights into the image
+
+**Date:** 2026-07-27
+**Image:** lyralearn-ml:2.2 (6.71 GB compressed vs 2.1's 3.99 GB), Demucs htdemucs + Whisper large-v3 baked; Basic Pitch ships inside its wheel (confirmed — no baking needed, answering §5.3's open question)
+**Job:** lyralearn-2-2-20260727-010436 — ml.g4dn.xlarge, Completed; zero "Downloading" lines in the logs (baking verified)
+
+**Measurements vs the 2.1 cold baseline:**
+| metric | 2.1 (cold) | 2.2 (baked) | delta |
+|---|---|---|---|
+| start-to-first-inference | 142.3 s | 156.4 s | **+14.1 s (worse)** |
+| demucs | 16.2 s | 15.0 s | −1.2 s |
+| whisper + pitch (concurrent) | 56.2 s | 45.3 s | −10.9 s (the in-stage download, gone) |
+| in-container total | 72.4 s | 60.3 s | −12.1 s |
+| job wall clock (Created→Ended) | 268.1 s | 274.2 s | +6.1 s (wash) |
+
+**Done-when verdict: NOT met as written** ("start-to-first-inference visibly
+drops") — and the measurement explains why the premise was wrong, which is the
+more valuable result. §5.3 assumed model downloads dominate job start; on AWS-
+internal bandwidth the whisper large-v3 download ran at ~260 MB/s (~11 s inside
+stage 2), while baking moved those same bytes into a +2.7 GB compressed image
+pull that costs slightly MORE before first inference. Net wall clock is a wash.
+
+**Decision — keeping the baked :2.2 image anyway**, because its real value is
+dependency isolation, not latency: an unbaked job start depends on the HF Hub
+being up and un-throttled at every job (the 2.1 logs even warned about
+unauthenticated rate limits); the baked image pulls only from ECR. Update
+§5.3's rationale when the architecture doc is next revised.
+
+**Sanity gate:** `compare_s3_output.py output output/sagemaker-2.2` → PASS
+(30 vs 35 lines, 684 vs 697 notes; Whisper segmentation varies run-to-run —
+38 lines in the 2.1 run, 30 here, same model/precision).
+
+**Verdict:** proceed to Phase 2.3 (already built in parallel — see §2.3).
