@@ -23,6 +23,25 @@ def test_text_similarity_orders_sensibly():
     assert cmp_mod.text_similarity(a, far) < 0.5
 
 
+def test_text_similarity_works_on_full_song_length_texts():
+    # difflib autojunk kicks in at >=200 chars and floors the ratio to ~0 on
+    # real transcripts; a full-song comparison must not fall into that trap.
+    verse = "alo salut sunt eu un haiduc si te rog iubirea mea primeste fericirea "
+    a = verse * 10
+    close = (verse * 9) + "alo salut sunt eu un haiduc si te rog iubirea ta primeste bucuria "
+    assert len(a) > 200
+    assert cmp_mod.text_similarity(a, close) > 0.9
+
+
+def test_text_similarity_ignores_diacritic_emission_differences():
+    # Measured on the real 2.1 run: CPU int8 Whisper emits diacritics
+    # (Si-comma etc.), GPU float16 emits plain ASCII for the same words.
+    # Same lyrics must still score as near-identical.
+    with_diacritics = "Și te rog, iubirea mea primește fericirea. Vrei să pleci, dar nu mă iei. " * 4
+    ascii_fold = "Si te rog, iubirea mea primeste fericirea. Vrei sa pleci, dar nu ma iei. " * 4
+    assert cmp_mod.text_similarity(with_diacritics, ascii_fold) > 0.95
+
+
 def _lines(n, words_per_line=7):
     return [{"lineNumber": i + 1, "originalText": "la " * words_per_line,
              "startTime": float(i), "endTime": float(i + 1),
