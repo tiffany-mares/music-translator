@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Phase 2.1: manually trigger ONE whole-song SageMaker Processing Job.
-# Usage: AWS_REGION=... ACCOUNT_ID=... BUCKET=... scripts/aws/run_processing_job.sh
+# Phase 2.1/2.2: manually trigger ONE whole-song SageMaker Processing Job.
+# Usage: AWS_REGION=... ACCOUNT_ID=... BUCKET=... [IMAGE_TAG=2.2] scripts/aws/run_processing_job.sh
 set -euo pipefail
 : "${AWS_REGION:?}" "${ACCOUNT_ID:?}" "${BUCKET:?}"
 
+IMAGE_TAG="${IMAGE_TAG:-2.1}"
 SONG_ID="test-song-001"
-JOB_NAME="lyralearn-2-1-$(date +%Y%m%d-%H%M%S)"
-IMAGE_URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/lyralearn-ml:2.1"
+JOB_NAME="lyralearn-${IMAGE_TAG//./-}-$(date +%Y%m%d-%H%M%S)"
+IMAGE_URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/lyralearn-ml:$IMAGE_TAG"
 ROLE_ARN="arn:aws:iam::$ACCOUNT_ID:role/lyralearn-sagemaker-processing"
 OUTPUT_S3="s3://$BUCKET/songs/$SONG_ID/ml-output/$JOB_NAME/"
 
