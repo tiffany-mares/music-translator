@@ -28,4 +28,8 @@ ENV PYTHONPATH=/opt/ml/code
 # in the demucs child process ("MKL_THREADING_LAYER=INTEL is incompatible with
 # libgomp.so.1") when spawned from the loaded entrypoint. GNU layer resolves it.
 ENV MKL_THREADING_LAYER=GNU
+# The base image's cuDNN 8 lives inside torch's private lib dir (torch finds it
+# via rpath) and LD_LIBRARY_PATH is empty, so ctranslate2's dlopen of
+# libcudnn_ops_infer.so.8 aborts (exit 134) on GPU. Expose torch's copy.
+ENV LD_LIBRARY_PATH=/opt/conda/lib/python3.10/site-packages/torch/lib
 ENTRYPOINT ["python", "/opt/ml/code/process.py"]
