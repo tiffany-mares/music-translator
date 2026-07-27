@@ -6,6 +6,7 @@
 //! short-circuit are Phases 3.4/3.5. That gap IS the done-when: a malformed
 //! upload is rejected before anything downstream can run.
 
+mod fingerprint;
 mod validation;
 
 use aws_sdk_dynamodb::types::AttributeValue;
