@@ -42,6 +42,9 @@ pub fn fingerprint_bytes(bytes: Vec<u8>, ext: &str) -> Result<Vec<u32>, String> 
     let track_id = track.id;
     let sample_rate = track.codec_params.sample_rate.ok_or("unknown sample rate")?;
     let channels = track.codec_params.channels.ok_or("unknown channel layout")?.count() as u32;
+    if channels == 0 {
+        return Err("no audio channels".to_string());
+    }
     let mut decoder = symphonia::default::get_codecs()
         .make(&track.codec_params, &DecoderOptions::default())
         .map_err(|e| format!("unsupported codec: {e}"))?;
