@@ -111,9 +111,31 @@
       },
       "ResultSelector": {
         "stitchedPrefix.$": "$.Payload.stitchedPrefix",
-        "transcriptKey.$": "$.Payload.transcriptKey"
+        "transcriptKey.$": "$.Payload.transcriptKey",
+        "vocalsKey.$": "$.Payload.vocalsKey",
+        "noVocalsKey.$": "$.Payload.noVocalsKey"
       },
       "ResultPath": "$.stitch",
+      "Catch": [ { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" } ],
+      "Next": "WriteAudioKeys"
+    },
+    "WriteAudioKeys": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Comment": "Phase 3.5: publish the stitched stems onto METADATA.audioKeys before translation so playback hydrates as early as the stems exist. Assumes the audioKeys map exists (POST /songs always writes audioKeys={raw}).",
+      "Parameters": {
+        "TableName": "LyraLearnTable",
+        "Key": {
+          "PK": { "S.$": "States.Format('SONG#{}', $.songId)" },
+          "SK": { "S": "METADATA" }
+        },
+        "UpdateExpression": "SET audioKeys.vocals = :v, audioKeys.noVocals = :nv",
+        "ExpressionAttributeValues": {
+          ":v": { "S.$": "$.stitch.vocalsKey" },
+          ":nv": { "S.$": "$.stitch.noVocalsKey" }
+        }
+      },
+      "ResultPath": null,
       "Catch": [ { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" } ],
       "Next": "RunTranslation"
     },
