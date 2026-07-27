@@ -52,13 +52,16 @@ module "orchestration" {
   audio_bucket            = var.audio_bucket
   chunked_max_concurrency = var.chunked_max_concurrency
   sagemaker_role_arn      = module.ml_processing.sagemaker_role_arn
+  mongodb_secret_arn      = module.storage.mongodb_secret_arn
 }
 
 module "api" {
-  source       = "./modules/api"
-  region       = var.region
-  account_id   = var.account_id
-  audio_bucket = var.audio_bucket
+  source                      = "./modules/api"
+  region                      = var.region
+  account_id                  = var.account_id
+  audio_bucket                = var.audio_bucket
+  mongodb_secret_arn          = module.storage.mongodb_secret_arn
+  chunked_state_machine_arn   = module.orchestration.chunked_state_machine_arn
 }
 
 output "user_pool_id" {

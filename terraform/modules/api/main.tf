@@ -60,11 +60,23 @@ output "jwt_issuer" {
 variable "region" { type = string }
 variable "account_id" { type = string }
 variable "audio_bucket" { type = string }
+variable "chunked_state_machine_arn" { type = string }
+variable "mongodb_secret_arn" { type = string }
 
 data "archive_file" "api_lambda" {
   type        = "zip"
   source_dir  = "${path.module}/../../../lambda/api"
   output_path = "${path.module}/api_lambda.zip"
+}
+
+# Phase 3.5: pymongo layer - bson is a C extension, built inside the matching
+# Lambda runtime image by scripts/build_api_layer.sh (zip is gitignored,
+# rebuild before plan; hash change republishes the layer version).
+resource "aws_lambda_layer_version" "api_deps" {
+  layer_name          = "lyralearn-api-deps"
+  filename            = "${path.module}/../../../lambda/api-layer/api-deps-layer.zip"
+  source_code_hash    = filebase64sha256("${path.module}/../../../lambda/api-layer/api-deps-layer.zip")
+  compatible_runtimes = ["python3.12"]
 }
 
 resource "aws_iam_role" "api" {
@@ -89,10 +101,12 @@ resource "aws_lambda_function" "api" {
   role             = aws_iam_role.api.arn
   timeout          = 10
   memory_size      = 256
+  layers           = [aws_lambda_layer_version.api_deps.arn]
 
   environment {
     variables = {
-      AUDIO_BUCKET = var.audio_bucket
+      AUDIO_BUCKET         = var.audio_bucket
+      MONGODB_SECRET_ARN   = var.mongodb_secret_arn
     }
   }
 }
@@ -178,7 +192,8 @@ resource "aws_lambda_function" "validate" {
 
   environment {
     variables = {
-      AUDIO_BUCKET = var.audio_bucket
+      AUDIO_BUCKET      = var.audio_bucket
+      STATE_MACHINE_ARN = var.chunked_state_machine_arn
     }
   }
 }

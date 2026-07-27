@@ -57,3 +57,13 @@ resource "aws_dynamodb_table" "ws_connections" {
     projection_type = "ALL"
   }
 }
+
+# Phase 3.5: MongoDB Atlas connection string. Terraform manages the SHELL only;
+# the value is set out-of-band with `aws secretsmanager put-secret-value` so
+# the credential never enters TF state.
+resource "aws_secretsmanager_secret" "mongodb" {
+  name        = "lyralearn/mongodb"
+  description = "MongoDB Atlas connection string (value set out-of-band, never in TF state)"
+}
+
+output "mongodb_secret_arn" { value = aws_secretsmanager_secret.mongodb.arn }

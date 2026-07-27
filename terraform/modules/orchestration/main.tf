@@ -3,6 +3,7 @@ variable "account_id" { type = string }
 variable "audio_bucket" { type = string }
 variable "chunked_max_concurrency" { type = number }
 variable "sagemaker_role_arn" { type = string }
+variable "mongodb_secret_arn" { type = string }
 
 locals {
   infra        = "${path.module}/../../../infra/aws"
@@ -16,13 +17,13 @@ locals {
   lambda_defs = {
     translate = { fn = "lyralearn-translate", role = "lyralearn-lambda-translate",
       policy_name = "lyralearn-translate-scoped", policy_file = "lambda-translate-policy.json",
-    tag = "2.3", memory = 4096 }
+    tag = "3.5", memory = 4096, env = { MONGODB_SECRET_ARN = var.mongodb_secret_arn } }
     chunk = { fn = "lyralearn-chunk-audio", role = "lyralearn-lambda-chunk",
       policy_name = "lyralearn-chunk-scoped", policy_file = "lambda-chunk-policy.json",
-    tag = "2.4", memory = 2048 }
+    tag = "2.4", memory = 2048, env = {} }
     stitch = { fn = "lyralearn-stitch-results", role = "lyralearn-lambda-stitch",
       policy_name = "lyralearn-stitch-scoped", policy_file = "lambda-stitch-policy.json",
-    tag = "2.5", memory = 4096 }
+    tag = "3.5", memory = 4096, env = {} }
   }
 }
 
@@ -48,6 +49,11 @@ resource "aws_lambda_function" "fn" {
   role          = aws_iam_role.lambda[each.key].arn
   timeout       = 300
   memory_size   = each.value.memory
+
+  dynamic "environment" {
+    for_each = length(each.value.env) > 0 ? [each.value.env] : []
+    content { variables = environment.value }
+  }
 
   lifecycle {
     # Code deploys stay with scripts/aws/deploy_*_lambda.sh (update-function-code);
@@ -89,3 +95,5 @@ resource "aws_sfn_state_machine" "chunked" {
   role_arn   = aws_iam_role.sfn.arn
   definition = local.render_chunked
 }
+
+output "chunked_state_machine_arn" { value = aws_sfn_state_machine.chunked.arn }
