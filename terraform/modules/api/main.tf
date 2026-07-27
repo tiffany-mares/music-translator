@@ -173,8 +173,8 @@ resource "aws_lambda_function" "validate" {
   filename         = "${path.module}/../../../lambda/validate/target/lambda/bootstrap/bootstrap.zip"
   source_code_hash = filebase64sha256("${path.module}/../../../lambda/validate/target/lambda/bootstrap/bootstrap.zip")
   role             = aws_iam_role.validate.arn
-  timeout          = 10
-  memory_size      = 128
+  timeout          = 30   # decode+fingerprint headroom (API GW caps responses at 29s anyway)
+  memory_size      = 1024 # ~0.57 vCPU; at 128 MB (0.08 vCPU) the audio decode would take minutes
 
   environment {
     variables = {

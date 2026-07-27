@@ -21,6 +21,12 @@
       "Resource": "arn:aws:dynamodb:__REGION__:__ACCOUNT_ID__:table/LyraLearnTable"
     },
     {
+      "Sid": "DedupLookup",
+      "Effect": "Allow",
+      "Action": "dynamodb:Query",
+      "Resource": "arn:aws:dynamodb:__REGION__:__ACCOUNT_ID__:table/LyraLearnTable/index/GSI3"
+    },
+    {
       "Sid": "OwnLogsOnly",
       "Effect": "Allow",
       "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
