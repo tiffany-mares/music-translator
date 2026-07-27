@@ -1,12 +1,12 @@
-//! POST /songs/{id}/process - upload validation + audio fingerprint dedup
-//! (Phase 3.4, section 5.2a).
+//! POST /songs/{id}/process - upload validation + audio fingerprint dedup +
+//! chunked Step Functions pipeline (Phase 3.4-3.5).
 //!
 //! Validation + fingerprint dedup: size bounds + magic-byte format check on the
 //! object under songs/{id}/raw/, then chromaprint-based fingerprinting to detect
 //! exact duplicates and near-duplicates. Matched songs are LINKED to the original
 //! songId with no pipeline run (near-instant dedup). New songs get VALIDATED status
-//! and are ready for the pipeline. Deliberately does NOT start Step Functions -
-//! that wiring is Phase 3.5.
+//! and start the chunked Step Functions pipeline (Phase 3.5). WebSocket push
+//! integration is Phase 6.
 
 mod fingerprint;
 mod validation;
@@ -117,6 +117,98 @@ async fn link_to_existing(
     Ok(())
 }
 
+/// 12 hex chars of a v4 UUID: dot-free (the composite jobId "{songId}.{jobKey}"
+/// splits on the LAST dot), valid as an SFN execution name and inside SageMaker
+/// job names, and 48 bits of entropy - ample uniqueness at this scale.
+fn mint_job_key() -> String {
+    uuid::Uuid::new_v4().simple().to_string()[..12].to_string()
+}
+
+/// Mint the jobKey, pre-write the JOB# item as QUEUED, start the chunked state
+/// machine. Returns the composite jobId "{songId}.{jobKey}".
+///
+/// QUEUED is written BEFORE StartExecution so GET /jobs/{jobId} resolves the
+/// moment the client has the jobId, and so this write can never land after
+/// (and clobber) the machine's own MarkProcessing update. The SFN input takes
+/// the BARE jobKey - the ASL formats SK as JOB#{jobId} itself.
+async fn start_pipeline(
+    sfn: &aws_sdk_sfn::Client,
+    ddb: &aws_sdk_dynamodb::Client,
+    table: &str,
+    song_id: &str,
+) -> Result<String, Error> {
+    let arn = std::env::var("STATE_MACHINE_ARN")
+        .map_err(|_| Error::from("STATE_MACHINE_ARN not set"))?;
+    let job_key = mint_job_key();
+
+    ddb.update_item()
+        .table_name(table)
+        .key("PK", AttributeValue::S(format!("SONG#{song_id}")))
+        .key("SK", AttributeValue::S(format!("JOB#{job_key}")))
+        .update_expression("SET #s = :s")
+        .expression_attribute_names("#s", "status")
+        .expression_attribute_values(":s", AttributeValue::S("QUEUED".into()))
+        .send()
+        .await?;
+
+    // Execution name == jobKey: unique per start (deterministic names
+    // self-collide on retry - notes/phase2.md 2.3), threads into S3 prefixes
+    // and SageMaker job names ("lyralearn-sfn-{jobKey}-chunk-NNN", 36 < 63).
+    let started = sfn
+        .start_execution()
+        .state_machine_arn(&arn)
+        .name(&job_key)
+        .input(serde_json::json!({ "songId": song_id, "jobId": job_key }).to_string())
+        .send()
+        .await;
+
+    if let Err(e) = started {
+        // Best-effort tombstone so the QUEUED item can't dangle forever.
+        let _ = ddb
+            .update_item()
+            .table_name(table)
+            .key("PK", AttributeValue::S(format!("SONG#{song_id}")))
+            .key("SK", AttributeValue::S(format!("JOB#{job_key}")))
+            .update_expression("SET #s = :s, errorInfo = :e")
+            .expression_attribute_names("#s", "status")
+            .expression_attribute_values(":s", AttributeValue::S("FAILED".into()))
+            .expression_attribute_values(":e", AttributeValue::S(format!("StartExecution failed: {e}")))
+            .send()
+            .await;
+        return Err(Error::from(format!("StartExecution failed: {e}")));
+    }
+    Ok(format!("{song_id}.{job_key}"))
+}
+
+/// Both VALIDATED-new exits (clean miss and decode-degrade) share this: the
+/// song IS validated either way, so a pipeline-start failure reports 500 with
+/// valid=true and leaves METADATA VALIDATED - a retried POST /process mints a
+/// fresh jobKey and execution.
+async fn respond_validated_with_pipeline(
+    sfn: &aws_sdk_sfn::Client,
+    ddb: &aws_sdk_dynamodb::Client,
+    table: &str,
+    song_id: &str,
+    format: &str,
+) -> Result<Response<Body>, Error> {
+    match start_pipeline(sfn, ddb, table, song_id).await {
+        Ok(job_id) => json_resp(
+            200,
+            serde_json::json!({ "valid": true, "songId": song_id, "format": format, "jobId": job_id }),
+        ),
+        Err(e) => {
+            eprintln!("pipeline start failed for {song_id}: {e}");
+            json_resp(
+                500,
+                serde_json::json!({
+                    "valid": true, "songId": song_id, "format": format,
+                    "error": "validated but the pipeline failed to start; retry POST /songs/{id}/process"
+                }),
+            )
+        }
+    }
+}
+
 async fn handler(event: Request) -> Result<Response<Body>, Error> {
     let song_id = match event.path_parameters().first("id") {
         Some(id) => id.to_string(),
@@ -126,6 +218,7 @@ async fn handler(event: Request) -> Result<Response<Body>, Error> {
     let config = aws_config::load_from_env().await;
     let s3 = aws_sdk_s3::Client::new(&config);
     let ddb = aws_sdk_dynamodb::Client::new(&config);
+    let sfn = aws_sdk_sfn::Client::new(&config);
     let bucket = std::env::var("AUDIO_BUCKET").expect("AUDIO_BUCKET not set");
     let table = std::env::var("TABLE_NAME").unwrap_or_else(|_| "LyraLearnTable".to_string());
 
@@ -182,10 +275,7 @@ async fn handler(event: Request) -> Result<Response<Body>, Error> {
                     // Opus): degrade to 3.3 behavior, never reject a playable upload.
                     eprintln!("fingerprint failed for {song_id}, skipping dedup: {e}");
                     set_status(&ddb, &table, &song_id, "VALIDATED", "audioFormat", format).await?;
-                    return json_resp(
-                        200,
-                        serde_json::json!({ "valid": true, "songId": song_id, "format": format }),
-                    );
+                    return respond_validated_with_pipeline(&sfn, &ddb, &table, &song_id, format).await;
                 }
             };
 
@@ -227,14 +317,21 @@ async fn handler(event: Request) -> Result<Response<Body>, Error> {
                 }
                 None => {
                     write_validated_with_fp(&ddb, &table, &song_id, format, &fp_key, &fp).await?;
-                    // Still no Step Functions start - the pass-path wiring is 3.5.
-                    json_resp(
-                        200,
-                        serde_json::json!({ "valid": true, "songId": song_id, "format": format }),
-                    )
+                    respond_validated_with_pipeline(&sfn, &ddb, &table, &song_id, format).await
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod job_key_tests {
+    #[test]
+    fn job_key_is_short_dotless_and_unique() {
+        let k = super::mint_job_key();
+        assert_eq!(k.len(), 12);
+        assert!(k.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(k, super::mint_job_key());
     }
 }
 
