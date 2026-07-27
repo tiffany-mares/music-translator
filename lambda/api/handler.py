@@ -34,7 +34,9 @@ def _s3():
     global _S3
     if _S3 is None:
         import boto3
-        _S3 = boto3.client("s3")
+        from botocore.client import Config
+        # SigV4 explicitly: the default can emit legacy SigV2 presigned URLs
+        _S3 = boto3.client("s3", config=Config(signature_version="s3v4"))
     return _S3
 
 
