@@ -39,3 +39,29 @@ PASS - Phase 3.1 done-when met.
 Test user `test@lyralearn.dev` kept for 3.2's Postman work. GSI backfill on the near-empty table took ~5 min per index.
 
 **Verdict:** 3.0 + 3.1 done. Next: 3.2 (core Python Lambda routes — needs the HTTP API + JWT authorizer wired from the outputs above, plus MongoDB Atlas for the lyrics read path per the Phase 2.3 S3-only decision). Phase 2.6 remains open in parallel, gated on the g4dn quota-6 request.
+
+## 3.2 — Core Python Lambda routes
+
+**Date:** 2026-07-27
+**Endpoint:** `https://v7iyrsczl5.execute-api.us-east-1.amazonaws.com` (HTTP API `lyralearn-http-api`, `$default` stage, Cognito JWT authorizer validating ID tokens by `aud`=client id). Lambda `lyralearn-api` (python3.12 zip via Terraform `archive_file`, 256 MB/10 s, role `lyralearn-lambda-api` scoped to the table + `songs/*`). All Terraform-native — 12 resources, plan-guard clean.
+
+**Decisions recorded (user, 2026-07-27):**
+- **Lyrics S3-backed in 3.2**; **MongoDB is a BINDING part of Phase 3.5**: "Phase 3.5 MUST include: Atlas M0 + Secrets Manager connection string + RunTranslation dual-write + lyrics-route swap to Mongo + S3 backfill." Same force as the (fulfilled) Terraform commitment.
+- **Composite jobId** `{songId}.{jobKey}` (split on last dot) — §6.1 keys jobs under the song, so a bare jobKey isn't addressable; `POST /songs/{id}/process` (3.5) mints these.
+- **`audioKeys` map** (`raw`/`vocals`/`noVocals` S3 keys) added to the §6.1 METADATA attributes; drives `GET /audio-urls`. The pipeline populates it starting 3.5.
+
+**Done-when (`scripts/verify_3_2.sh`):**
+```
+auth: unauthenticated 401 OK
+POST /songs: shape OK
+GET /jobs: shape OK (real job, COMPLETE)
+GET /lyrics: section 6.2 doc OK
+GET /audio-urls: shape OK
+presigned raw URL: fetches 200 OK
+PASS - Phase 3.2 done-when met.
+```
+Seed data was almost entirely REAL pipeline output (job item `job-2-5`, translated lyrics doc, 2.5 stitched stems); only the METADATA item was synthetic (`scripts/seed_3_2.sh`). Postman: base URL above + a fresh IdToken from `admin-initiate-auth` (the verify script prints one).
+
+**Finding:** boto3's default S3 client emitted legacy SigV2 presigned URLs (functional, non-standard) — the handler forces `signature_version="s3v4"`. Also note the HTTP API JWT authorizer validates ID tokens (`aud` claim); Cognito ACCESS tokens carry `client_id` instead and get 401 — use IdToken in clients.
+
+**Verdict:** 3.2 done. Next: 3.3 (Rust validation Lambda). Phase 2.6 still parked at the quota gate.
