@@ -2,9 +2,10 @@
 section 5.2 contract, behind the HTTP API's Cognito JWT authorizer.
 
 Thin read/proxy layer (architecture.md section 3): DynamoDB item reads/writes,
-S3 pre-signing, S3 lyrics proxy. Lyrics are S3-backed until Phase 3.5 moves
-them to MongoDB (user decision 2026-07-27) - the response body is the same
-section 6.2 doc either way.
+S3 pre-signing, S3 lyrics proxy. Phase 3.5: lyrics are Mongo-primary with an
+S3 fallback (user decision 2026-07-27) - the response body is the same
+section 6.2 doc either way; the `X-Lyrics-Source` header says which store
+served it.
 
 jobId is the opaque composite "{songId}.{jobKey}" because jobs are keyed
 SONG#{songId}/JOB#{jobKey} (section 6.1); split on the LAST dot.
@@ -18,8 +19,12 @@ BUCKET = os.environ.get("AUDIO_BUCKET", "")
 TABLE = os.environ.get("TABLE_NAME", "LyraLearnTable")
 URL_TTL_SECONDS = 900  # section 5.2: 15-minute TTL
 
+MONGODB_SECRET_ARN = os.environ.get("MONGODB_SECRET_ARN", "")
+MONGO_DB, MONGO_COLLECTION = "lyralearn", "lyrics"
+
 _DDB = None
 _S3 = None
+_MONGO = None
 
 
 def _ddb():
@@ -38,6 +43,18 @@ def _s3():
         # SigV4 explicitly: the default can emit legacy SigV2 presigned URLs
         _S3 = boto3.client("s3", config=Config(signature_version="s3v4"))
     return _S3
+
+
+def _mongo():
+    global _MONGO
+    if _MONGO is None:
+        import boto3
+        from pymongo import MongoClient
+        uri = boto3.client("secretsmanager").get_secret_value(
+            SecretId=MONGODB_SECRET_ARN)["SecretString"]
+        _MONGO = MongoClient(uri, serverSelectionTimeoutMS=5000,
+                             connectTimeoutMS=5000, maxPoolSize=5)
+    return _MONGO
 
 
 def _resp(status, payload):
@@ -84,14 +101,30 @@ def get_job(event, claims):
     return _resp(200, out)
 
 
+def _lyrics_response(body, source):
+    return {"statusCode": 200,
+            "headers": {"Content-Type": "application/json", "X-Lyrics-Source": source},
+            "body": body}
+
+
 def get_lyrics(event, claims):
     song_id = event["pathParameters"]["id"]
+    # Phase 3.5: Mongo primary, S3 fallback (logged). Same section 6.2 body
+    # either way; X-Lyrics-Source says which store served it.
+    if MONGODB_SECRET_ARN:
+        try:
+            doc = _mongo()[MONGO_DB][MONGO_COLLECTION].find_one(
+                {"songId": song_id}, {"_id": 0})
+            if doc is not None:
+                return _lyrics_response(json.dumps(doc, ensure_ascii=False), "mongo")
+            print(f"MONGO MISS for {song_id}, falling back to S3")
+        except Exception as e:  # noqa: BLE001 - availability over strictness here
+            print(f"MONGO READ FAILED for {song_id}, falling back to S3: {e!r}")
     try:
         obj = _s3().get_object(Bucket=BUCKET, Key=f"songs/{song_id}/lyrics/song_lyrics.json")
     except _s3().exceptions.NoSuchKey:
         return _resp(404, {"error": "lyrics not available"})
-    return {"statusCode": 200, "headers": {"Content-Type": "application/json"},
-            "body": obj["Body"].read().decode("utf-8")}
+    return _lyrics_response(obj["Body"].read().decode("utf-8"), "s3-fallback")
 
 
 def get_audio_urls(event, claims):

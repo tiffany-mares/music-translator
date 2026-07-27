@@ -21,6 +21,7 @@ terraform/.terraform/
 Thumbs.db
 terraform/modules/api/api_lambda.zip
 lambda/validate/target/
+lambda/api-layer/
 
 # Terraform plan artifacts (never commit - may embed account/resource detail)
 tfplan

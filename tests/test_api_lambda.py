@@ -115,3 +115,51 @@ def test_get_audio_urls_presigns_each_key(monkeypatch):
 def test_unknown_route_404(monkeypatch):
     _wire(monkeypatch)
     assert api.handler({"routeKey": "GET /nope", "requestContext": {}}, None)["statusCode"] == 404
+
+
+class FakeMongoColl:
+    def __init__(self, docs=None, fail=False):
+        self.docs = docs or {}
+        self.fail = fail
+
+    def find_one(self, flt, projection=None):
+        if self.fail:
+            raise RuntimeError("atlas down")
+        return self.docs.get(flt["songId"])
+
+
+def _wire_mongo(monkeypatch, coll):
+    monkeypatch.setattr(api, "MONGODB_SECRET_ARN", "arn:fake")
+    monkeypatch.setattr(api, "_mongo", lambda: {"lyralearn": {"lyrics": coll}})
+
+
+def test_get_lyrics_mongo_primary(monkeypatch):
+    _wire(monkeypatch)
+    _wire_mongo(monkeypatch, FakeMongoColl(
+        {"s1": {"songId": "s1", "lines": [{"originalText": "Și te rog"}]}}))
+    resp = api.handler(_event("GET /songs/{id}/lyrics", path_id="s1"), None)
+    assert resp["statusCode"] == 200
+    assert resp["headers"]["X-Lyrics-Source"] == "mongo"
+    assert json.loads(resp["body"])["lines"][0]["originalText"] == "Și te rog"
+
+
+def test_get_lyrics_mongo_miss_falls_back_to_s3(monkeypatch):
+    doc = json.dumps({"songId": "s1", "lines": []})
+    _wire(monkeypatch, s3=FakeS3({"songs/s1/lyrics/song_lyrics.json": doc}))
+    _wire_mongo(monkeypatch, FakeMongoColl({}))
+    resp = api.handler(_event("GET /songs/{id}/lyrics", path_id="s1"), None)
+    assert (resp["statusCode"], resp["headers"]["X-Lyrics-Source"]) == (200, "s3-fallback")
+
+
+def test_get_lyrics_mongo_error_falls_back_to_s3(monkeypatch):
+    doc = json.dumps({"songId": "s1", "lines": []})
+    _wire(monkeypatch, s3=FakeS3({"songs/s1/lyrics/song_lyrics.json": doc}))
+    _wire_mongo(monkeypatch, FakeMongoColl(fail=True))
+    resp = api.handler(_event("GET /songs/{id}/lyrics", path_id="s1"), None)
+    assert (resp["statusCode"], resp["headers"]["X-Lyrics-Source"]) == (200, "s3-fallback")
+
+
+def test_get_lyrics_missing_everywhere_404(monkeypatch):
+    _wire(monkeypatch)
+    _wire_mongo(monkeypatch, FakeMongoColl({}))
+    assert api.handler(_event("GET /songs/{id}/lyrics", path_id="gone"), None)["statusCode"] == 404
