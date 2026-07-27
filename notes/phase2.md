@@ -121,3 +121,33 @@ unauthenticated rate limits); the baked image pulls only from ECR. Update
 **Terraform commitment (user decision, 2026-07-27):** Phase 3 MUST begin with adopting §7's Terraform layout (orchestration/storage/ml-processing modules), importing the ~14 resources created by CLI in Phases 2.1–2.3 (S3 bucket, ECR repos lyralearn-ml + lyralearn-translate, IAM roles lyralearn-sagemaker-processing + lyralearn-lambda-translate + lyralearn-sfn-pipeline, LyraLearnTable, the translate Lambda, the state machine), and choosing a state backend — do not start Phase 3 API work before this.
 
 **Verdict:** Phase 2.3 done. Next: 2.4 (chunking) — carry the §4 Retry naming fix into the Map-state design.
+
+## 2.4 — Chunked pipeline (ChunkAudio + Map fan-out)
+
+**Date:** 2026-07-27
+**State machine:** arn:aws:states:us-east-1:503233513399:stateMachine:lyralearn-pipeline-chunked
+`MarkProcessing → ChunkAudio (Lambda) → Map[per-chunk createProcessingJob.sync, lyralearn-ml:2.4] → MarkComplete/Failed` — §4's fan-out without StitchResults/RunTranslation (those are 2.5); the linear `lyralearn-pipeline` stays the end-to-end path meanwhile. Deploy: `scripts/aws/deploy_chunked_state_machine.sh` (knobs: `IMAGE_TAG=2.4`, `MAX_CONCURRENCY=1`); trigger: `SM_NAME=lyralearn-pipeline-chunked scripts/aws/start_pipeline_execution.sh <songId> <jobId>`.
+
+**ChunkAudio Lambda** (`lyralearn-chunk-audio`, container image, 2048 MB / 300 s): soundfile decodes the mp3 (bundled libsndfile ≥ 1.1 — no ffmpeg) and slices sample-accurately; 40 s chunks, 2.5 s overlap (§11's open knob), stride 37.5 s — the math guarantees the tail chunk always exceeds the overlap. Writes WAV chunks + `manifest.json` (job names, prefixes, offsets — 2.5's stitcher reads this) and precomputes per-chunk job names `lyralearn-sfn-{exec}-{chunkId}` to fit the IAM prefix. Direct-invoke verified before wiring: 6 chunks, 215.4 s, offsets `[0, 37.5, 75, 112.5, 150, 187.5]`.
+
+**Done-when execution:** `job-2-4-20260727-023532` — SUCCEEDED (~32 min wall, MaxConcurrency 1 ⇒ 6 sequential jobs); job item `status=COMPLETE`, `chunkCount=6` (§6.1's attribute), `stageOutputs.{chunksPrefix, mlOutputPrefix}`.
+
+**Gate (`python scripts/verify_chunk_outputs.py lyralearn-audio-503233513399 test-song-001 job-2-4-20260727-023532`):**
+```
+  chunk-000: offset    0.0s, 2 lines, 94 notes
+  chunk-001: offset   37.5s, 14 lines, 118 notes
+  chunk-002: offset   75.0s, 9 lines, 112 notes
+  chunk-003: offset  112.5s, 5 lines, 153 notes
+  chunk-004: offset  150.0s, 5 lines, 139 notes
+  chunk-005: offset  187.5s, 7 lines, 104 notes
+PASS - all 6 chunks complete with correct chunk_start_offset metadata.
+```
+(42 chunk-lines / 720 chunk-notes vs ~35 lines / ~690 notes whole-song — the surplus is the 2.5 s overlap duplication the 2.5 stitcher dedupes.)
+
+**Timing observation:** ~32 min / 6 jobs ≈ 5.3 min wall per chunk job for only ~10–60 s of actual ML each — instance boot + image pull dominates per-chunk cost, exactly §4's stated tradeoff: chunking only buys wall-clock time once the Map actually runs concurrently. Sequential chunked (32 min) is far WORSE than the whole-song job (4.5 min); `MaxConcurrency=6` is the entire point (2.6 validates the ~70–110 s target).
+
+**Quota:** the increase to 6 (§4's MaxConcurrency) could not be filed — AWS allows one open request per quota and the original 0→1 case (`341e4965`) is still formally open despite the quota being granted. File `desired-value 6` for `L-2F1EB012` as soon as it closes; until then the chunked machine deploys with `MAX_CONCURRENCY=1`.
+
+**Ops note:** the venv's pinned boto3 (1.34.131) cannot resolve the root `aws login` session credentials (provider is newer than the pin) — run boto3 scripts with `eval "$(aws configure export-credentials --profile new-profile-name --format env)"`.
+
+**Verdict:** Phase 2.4 done. Next: 2.5 (StitchResults — crossfade stems at overlaps, offset+merge/dedupe transcript lines and pitch notes by chunkStartOffset, then hook RunTranslation + the §5.4 per-artifact prefixes into the chunked machine).
