@@ -208,12 +208,16 @@ If `check_duplicate` returns an existing `songId`, the Lambda writes a `SONG#{ne
 FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
 RUN pip install demucs==4.0.1 faster-whisper==1.0.3 basic-pitch==0.3.3 pybind11
 
-# Bake model weights into the image layer at build time — no download on job start.
-# Both Demucs and Whisper weights need this; only Whisper was covered in an earlier
-# version of this Dockerfile, which left Demucs still downloading its checkpoint on
-# every job start. Confirm Basic Pitch's bundled model doesn't need the same treatment.
+# Bake model weights into the image layer at build time. The value here is
+# DEPENDENCY ISOLATION, not speed — Phase 2.2 measured this (notes/phase2.md §2.2):
+# on AWS-internal bandwidth the HF download runs at ~260 MB/s (~11 s), while the
+# +2.7 GB bigger image made start-to-first-inference slightly WORSE (142 s → 156 s,
+# wall clock a wash). Baked weights mean a job never depends on the HF Hub being
+# up and un-throttled. Basic Pitch needs no baking — its weights ship in the wheel
+# (confirmed in 2.2). download_model, not WhisperModel(...): instantiating loads
+# the ~3 GB model into RAM during the build for nothing.
 RUN python -c "from demucs.pretrained import get_model; get_model('htdemucs')"
-RUN python -c "from faster_whisper import WhisperModel; WhisperModel('large-v3', device='cpu')"
+RUN python -c "from faster_whisper import download_model; download_model('large-v3')"
 
 COPY dsp_core/ /opt/dsp_core/
 RUN cd /opt/dsp_core && python setup.py build_ext --inplace
@@ -466,6 +470,7 @@ Done when: the job completes and its S3 output matches what Phase 1 produced loc
 
 **2.2 Bake in model weights.** Add the `RUN python -c "..."` layers for both Demucs and Whisper (Section 5.3 — this is the step an earlier version of this doc missed for Demucs specifically).
 Done when: job start-to-first-inference time visibly drops versus 2.1's cold run.
+*Outcome (2026-07-27): criterion measured and inverted — start-to-first-inference went 142.3 s → 156.4 s, because AWS-internal model downloads are nearly free while the +2.7 GB image pull is not; in-container ML time dropped 72.4 s → 60.3 s and wall clock was a wash. Baking kept anyway for HF-Hub dependency isolation (Section 5.3's updated rationale); full numbers in notes/phase2.md §2.2.*
 
 **2.3 Build the linear Step Functions ASL.** `MarkProcessing → RunMLPipeline → RunTranslation → MarkComplete/Failed` (Section 4, pre-chunking version), triggered manually with a test payload — no API layer yet.
 Done when: a full execution shows green in the Step Functions console history, including a deliberately-forced failure path (bad audio file) hitting `MarkFailed` correctly.
