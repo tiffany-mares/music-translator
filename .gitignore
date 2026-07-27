@@ -19,3 +19,4 @@ terraform/.terraform/
 # OS
 .DS_Store
 Thumbs.db
+terraform/modules/api/api_lambda.zip

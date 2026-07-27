@@ -54,3 +54,99 @@ output "user_pool_client_id" { value = aws_cognito_user_pool_client.web.id }
 output "jwt_issuer" {
   value = "https://cognito-idp.us-east-1.amazonaws.com/${aws_cognito_user_pool.users.id}"
 }
+
+# ---- Phase 3.2: HTTP API + JWT authorizer + the core Python routes Lambda ----
+
+variable "region" { type = string }
+variable "account_id" { type = string }
+variable "audio_bucket" { type = string }
+
+data "archive_file" "api_lambda" {
+  type        = "zip"
+  source_dir  = "${path.module}/../../../lambda/api"
+  output_path = "${path.module}/api_lambda.zip"
+}
+
+resource "aws_iam_role" "api" {
+  name               = "lyralearn-lambda-api"
+  assume_role_policy = file("${path.module}/../../../infra/aws/lambda-trust.json")
+}
+
+resource "aws_iam_role_policy" "api" {
+  name = "lyralearn-api-scoped"
+  role = aws_iam_role.api.id
+  policy = replace(replace(replace(
+    file("${path.module}/../../../infra/aws/lambda-api-policy.json"),
+  "__BUCKET__", var.audio_bucket), "__REGION__", var.region), "__ACCOUNT_ID__", var.account_id)
+}
+
+resource "aws_lambda_function" "api" {
+  function_name    = "lyralearn-api"
+  runtime          = "python3.12"
+  handler          = "handler.handler"
+  filename         = data.archive_file.api_lambda.output_path
+  source_code_hash = data.archive_file.api_lambda.output_base64sha256
+  role             = aws_iam_role.api.arn
+  timeout          = 10
+  memory_size      = 256
+
+  environment {
+    variables = {
+      AUDIO_BUCKET = var.audio_bucket
+    }
+  }
+}
+
+resource "aws_apigatewayv2_api" "http" {
+  name          = "lyralearn-http-api"
+  protocol_type = "HTTP"
+}
+
+resource "aws_apigatewayv2_stage" "default" {
+  api_id      = aws_apigatewayv2_api.http.id
+  name        = "$default"
+  auto_deploy = true
+}
+
+resource "aws_apigatewayv2_authorizer" "cognito" {
+  api_id           = aws_apigatewayv2_api.http.id
+  name             = "cognito-jwt"
+  authorizer_type  = "JWT"
+  identity_sources = ["$request.header.Authorization"]
+
+  jwt_configuration {
+    audience = [aws_cognito_user_pool_client.web.id]
+    issuer   = "https://cognito-idp.us-east-1.amazonaws.com/${aws_cognito_user_pool.users.id}"
+  }
+}
+
+resource "aws_apigatewayv2_integration" "api_lambda" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.api.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "routes" {
+  for_each = toset([
+    "POST /songs",
+    "GET /jobs/{id}",
+    "GET /songs/{id}/lyrics",
+    "GET /songs/{id}/audio-urls",
+  ])
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = each.key
+  target             = "integrations/${aws_apigatewayv2_integration.api_lambda.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+}
+
+resource "aws_lambda_permission" "apigw" {
+  statement_id  = "AllowHttpApiInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.api.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+
+output "api_endpoint" { value = aws_apigatewayv2_api.http.api_endpoint }

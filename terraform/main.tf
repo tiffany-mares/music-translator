@@ -1,7 +1,8 @@
 terraform {
   required_version = ">= 1.10"
   required_providers {
-    aws = { source = "hashicorp/aws", version = "~> 5.0" }
+    aws     = { source = "hashicorp/aws", version = "~> 5.0" }
+    archive = { source = "hashicorp/archive", version = "~> 2.4" }
   }
   backend "s3" {
     bucket       = "lyralearn-tfstate-503233513399"
@@ -54,7 +55,10 @@ module "orchestration" {
 }
 
 module "api" {
-  source = "./modules/api"
+  source       = "./modules/api"
+  region       = var.region
+  account_id   = var.account_id
+  audio_bucket = var.audio_bucket
 }
 
 output "user_pool_id" {
@@ -65,4 +69,7 @@ output "user_pool_client_id" {
 }
 output "jwt_issuer" {
   value = module.api.jwt_issuer
+}
+output "api_endpoint" {
+  value = module.api.api_endpoint
 }
