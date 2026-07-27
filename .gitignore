@@ -11,6 +11,11 @@ output/
 # Rendered infra templates (account-specific values filled in at deploy time)
 infra/aws/*.filled.json
 
+# Terraform (lock file .terraform.lock.hcl IS committed)
+terraform/.terraform/
+*.tfstate
+*.tfstate.*
+
 # OS
 .DS_Store
 Thumbs.db
