@@ -18,6 +18,22 @@ sfn_count() {
 }
 LINEAR_ARN="arn:aws:states:$AWS_REGION:503233513399:stateMachine:lyralearn-pipeline"
 CHUNKED_ARN="arn:aws:states:$AWS_REGION:503233513399:stateMachine:lyralearn-pipeline-chunked"
+
+# Idempotency: de-index fingerprints left by prior gate runs (dev table -
+# every FP1# entry at this phase is gate residue). Without this, a re-run's
+# song A matches its own previous upload and the VALIDATED assertions fail.
+aws dynamodb scan --table-name LyraLearnTable --region "$AWS_REGION" \
+  --filter-expression "begins_with(GSI3PK, :p)" \
+  --expression-attribute-values '{":p":{"S":"FP1#"}}' \
+  --projection-expression "PK,SK" --query "Items" --output json |
+python -c "
+import json,subprocess,sys
+for it in json.load(sys.stdin):
+    subprocess.run(['aws','dynamodb','update-item','--table-name','LyraLearnTable',
+        '--region','$AWS_REGION','--key',json.dumps({'PK':it['PK'],'SK':it['SK']}),
+        '--update-expression','REMOVE GSI3PK'],check=True)
+"
+
 BEFORE_LINEAR=$(sfn_count "$LINEAR_ARN"); BEFORE_CHUNKED=$(sfn_count "$CHUNKED_ARN")
 
 new_song() {
@@ -73,7 +89,9 @@ B_LINKED=$(echo "$B_OUT" | field linkedSongId)
 # --- song C: a DIFFERENT song -> must NOT link (false-positive control) ---
 C=$(new_song "Different Song Control")
 C_ID=$(echo "$C" | field songId); C_URL=$(echo "$C" | field uploadUrl)
-curl -s -X PUT --upload-file "test_data/Trenulețul - Zdob și Zdub (128k).mp3" "$C_URL"
+# Copy to an ASCII temp name: Windows mingw curl cannot open non-ASCII paths.
+cp "test_data/Trenulețul - Zdob și Zdub (128k).mp3" control_song.mp3
+curl -s -X PUT --upload-file control_song.mp3 "$C_URL"; rm -f control_song.mp3
 C_OUT=$(curl -s -X POST -H "Authorization: Bearer $TOKEN" "$API/songs/$C_ID/process")
 echo "$C_OUT" | python -c "import json,sys; d=json.load(sys.stdin); assert d['valid'] is True and 'linkedSongId' not in d" \
   && echo "different song: VALIDATED, not linked" || { echo "different song: FAIL -> $C_OUT"; FAIL=1; }
