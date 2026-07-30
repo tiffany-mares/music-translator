@@ -4,8 +4,10 @@ the API route. Exit 0 if found, 1 if missing.
 Usage: [MONGODB_URI=...] AWS_REGION=... python scripts/check_mongo_doc.py <songId>
 """
 import json
+import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.backfill_lyrics_to_mongo import mongo_uri
 
 
