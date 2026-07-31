@@ -187,3 +187,37 @@ body {
   color: #2e6e46;
   font-weight: 600;
 }
+
+/* --- Player --- */
+.player {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.player audio {
+  width: 100%;
+  max-width: 26rem;
+}
+
+.player-stems {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.player-stems button {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid #c9c9c2;
+  border-radius: 6px;
+  background: #fff;
+  color: #1a1a2e;
+  font-weight: 400;
+  cursor: pointer;
+  align-self: auto;
+}
+
+.player-stems button[aria-pressed='true'] {
+  background: #1a1a2e;
+  color: #fafaf7;
+  font-weight: 600;
+}
