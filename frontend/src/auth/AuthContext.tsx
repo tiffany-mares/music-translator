@@ -19,6 +19,7 @@ interface AuthContextValue {
   confirmSignUp: (email: string, code: string) => Promise<void>
   resendCode: (email: string) => Promise<void>
   signOut: () => Promise<void>
+  getIdToken: () => Promise<string>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -77,8 +78,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('signedOut')
   }, [])
 
+  // The API's JWT authorizer validates ID tokens, never access tokens.
+  // fetchAuthSession auto-refreshes, so calling per-request keeps tokens fresh.
+  const getIdToken = useCallback(async (): Promise<string> => {
+    const token = (await fetchAuthSession()).tokens?.idToken?.toString()
+    if (!token) throw new Error('No ID token — session expired')
+    return token
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ status, email, signIn, signUp, confirmSignUp, resendCode, signOut }}>
+    <AuthContext.Provider
+      value={{ status, email, signIn, signUp, confirmSignUp, resendCode, signOut, getIdToken }}
+    >
       {children}
     </AuthContext.Provider>
   )
