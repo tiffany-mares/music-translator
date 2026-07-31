@@ -124,3 +124,27 @@ PASS - Phase 4.1 done-when met (scripted half).
 - `scripts/verify_4_4.sh` PASS: 200 + `X-Lyrics-Source: mongo`, 137 words / 2 lines on the 4.3 song with valid ordered timings, no-doc 404 (post-fix).
 
 **Verdict:** Phase 4.4 done — highlighting is accurate and appears without reload the moment processing finishes, on the deployed app. Next: 4.5 loading/error states ("Lyrics loading..." placeholder, failed-job handling, retry affordance; done-when: a deliberately-forced pipeline failure surfaces a real error state).
+
+## 4.5 — Loading/error states
+
+**Date:** 2026-07-31
+**Stack:** existing only — zero deps, zero terraform, zero backend.
+
+**Design decisions:**
+- **Tri-state `pipelineState: 'running' | 'failed' | 'done'`** replaces WordSyncedLyrics's boolean (a separate `pipelineFailed` flag would allow the impossible `done && failed`). Renders: running → "Lyrics loading…" (§5.1's promised copy, finally shipped); failed → null (JobStatusLine's `role="alert"` owns the failure — no double-alert); done+no-data → placeholder; done+error → "Couldn't load lyrics."; done+data → panel. `useLyrics` keeps its boolean via `=== 'done'`.
+- **Try again on FAILED**: UploadPanel's polling branch reads the deduped `['job', jobId]` query (three observers, one fetch) and surfaces the button → the existing `retryProcess` → re-POST /process → fresh jobKey → polling restarts under the new key with fresh backoff. Player stays mounted (4.3: raw playback survives failure).
+- **The `setSrc(undefined)` double-adopt trap (design catch):** the obvious reload-track implementation — clear src and let the adoption effect re-adopt — would fire the effect with the STALE cached urls and re-adopt the exact expired URL before the refetch lands. Instead `reloadTrack` awaits `refetch()` and direct-sets the fresh URL (selectStem's pattern); the `res.isSuccess` guard is load-bearing (RQ v5 retains prior data on refetch error — without it we'd re-adopt the stale URL). Covered by a regression test.
+- Audio-urls fetch error replaces the previously-eternal "Preparing audio…" with an alert + Retry.
+
+**Forcing recipe (the 2.3 test case, UI-reachable):** `b'ID3' + os.urandom(61*1024)` — passes Rust magic-byte validation as mp3, fails chromaprint (3.4 degrade → VALIDATED, pipeline starts), then ChunkAudio's `sf.read` raises LibsndfileError → Catch → MarkFailed → FAILED in seconds. No SageMaker, no cost.
+
+**Fallout fix:** UploadPanel's new top-level `useJobPolling` requires a QueryClient — `AuthPage.test.tsx` (unchanged since 4.1) still rendered with a bare AuthProvider and its two Shell-reaching tests crashed to an empty body; migrated to `renderWithProviders` + api-client mock.
+
+**Tests:** 92 (82 + 10: WordSyncedLyrics 3 new + 2 edited, Player 5, UploadPanel 2).
+
+**Live done-when evidence (2026-07-31, deployed CloudFront app):**
+- `scripts/verify_4_5.sh` PASS: garbage passed validation and started pipeline `b63e270117f5.ae9c69aea527`, FAILED with non-empty error inside the 3-min window, retry minted fresh jobId `…70c04990df6c`.
+- Browser: garbage upload → FAILED state screenshot shows the `role="alert"` "Processing failed: LibsndfileError…" (truncated errorInfo incl. stack — verbose; 2.3's "trim to FailureReason later" note still stands), the mounted player with "Audio failed to load — the link may have expired." + **Reload track** (the media-error affordance firing on genuinely undecodable audio — expected side-show), and **Try again**. No silent hang anywhere.
+- Retry cycle sampled at 500ms: `processing+lyricsloading` → `FAILED+tryagain` — the fresh run showed "Lyrics loading…" during processing and the affordance restored on re-failure. "Lyrics loading…" correctly absent in both FAILED samples.
+
+**Verdict:** Phase 4.5 done — and with it **PHASE 4 IS COMPLETE**: auth shell (4.1), upload + job status (4.2), immediate playback (4.3), word-synced lyrics (4.4), loading/error states (4.5), all live at https://d38bvqcndpelgt.cloudfront.net with 92 frontend tests. Next: Phase 5 (learning service) or Phase 2.6 (timing validation, still gated on the g4dn quota-6 case).
