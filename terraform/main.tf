@@ -55,6 +55,11 @@ module "orchestration" {
   mongodb_secret_arn      = module.storage.mongodb_secret_arn
 }
 
+module "frontend" {
+  source     = "./modules/frontend"
+  account_id = var.account_id
+}
+
 module "api" {
   source                      = "./modules/api"
   region                      = var.region
@@ -62,6 +67,7 @@ module "api" {
   audio_bucket                = var.audio_bucket
   mongodb_secret_arn          = module.storage.mongodb_secret_arn
   chunked_state_machine_arn   = module.orchestration.chunked_state_machine_arn
+  frontend_origin             = "https://${module.frontend.domain_name}"
 }
 
 output "user_pool_id" {
@@ -75,4 +81,13 @@ output "jwt_issuer" {
 }
 output "api_endpoint" {
   value = module.api.api_endpoint
+}
+output "frontend_bucket" {
+  value = module.frontend.bucket_name
+}
+output "cloudfront_distribution_id" {
+  value = module.frontend.distribution_id
+}
+output "cloudfront_domain" {
+  value = module.frontend.domain_name
 }

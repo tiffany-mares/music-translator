@@ -62,6 +62,7 @@ variable "account_id" { type = string }
 variable "audio_bucket" { type = string }
 variable "chunked_state_machine_arn" { type = string }
 variable "mongodb_secret_arn" { type = string }
+variable "frontend_origin" { type = string } # https://dxxxx.cloudfront.net
 
 data "archive_file" "api_lambda" {
   type        = "zip"
@@ -114,6 +115,16 @@ resource "aws_lambda_function" "api" {
 resource "aws_apigatewayv2_api" "http" {
   name          = "lyralearn-http-api"
   protocol_type = "HTTP"
+
+  # HTTP APIs answer OPTIONS preflights before the JWT authorizer when
+  # cors_configuration is present — no auth on preflight, which is what
+  # browsers need. Origins are exact-match: no trailing slash.
+  cors_configuration {
+    allow_origins = [var.frontend_origin, "http://localhost:5173"]
+    allow_methods = ["GET", "POST", "OPTIONS"]
+    allow_headers = ["authorization", "content-type"]
+    max_age       = 3600
+  }
 }
 
 resource "aws_apigatewayv2_stage" "default" {

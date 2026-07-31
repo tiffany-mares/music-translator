@@ -1,0 +1,138 @@
+:root {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: #1a1a2e;
+  background: #fafaf7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.wordmark {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.loading {
+  text-align: center;
+  margin-top: 4rem;
+  color: #666;
+}
+
+/* --- Auth page --- */
+.auth-page {
+  max-width: 22rem;
+  margin: 10vh auto 0;
+  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-page h1.wordmark {
+  text-align: center;
+  font-size: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.auth-page form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.auth-page label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.auth-page input {
+  padding: 0.55rem 0.7rem;
+  font-size: 1rem;
+  border: 1px solid #c9c9c2;
+  border-radius: 6px;
+  font-weight: 400;
+}
+
+.auth-page button[type='submit'] {
+  padding: 0.6rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fafaf7;
+  background: #1a1a2e;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.auth-page button[type='submit']:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.auth-error {
+  color: #a4243b;
+  font-size: 0.9rem;
+}
+
+.auth-info {
+  color: #2e6e46;
+  font-size: 0.9rem;
+}
+
+.hint {
+  color: #666;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #1a4a8a;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* --- Shell --- */
+.shell-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1.2rem;
+  border-bottom: 1px solid #e2e2da;
+}
+
+.shell-header .wordmark {
+  font-size: 1.3rem;
+}
+
+.shell-user {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-size: 0.9rem;
+}
+
+.shell-user button {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid #c9c9c2;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.shell-main {
+  padding: 2rem 1.2rem;
+  color: #666;
+}
