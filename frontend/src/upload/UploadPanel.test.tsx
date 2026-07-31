@@ -34,6 +34,8 @@ describe('UploadPanel', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     mockedAuth.fetchAuthSession.mockResolvedValue(session)
+    // Player renders in polling/linked branches; keep its query deterministic.
+    mockedApi.getAudioUrls.mockResolvedValue({ urls: { raw: 'https://s3/raw?d' }, expiresInSeconds: 900 })
   })
 
   it('runs the full started path and shows job status', async () => {
@@ -90,6 +92,38 @@ describe('UploadPanel', () => {
     await pickAndSubmit(audioFile(10 * 1024))
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/between 50 KB and 25 MB/i))
     expect(mockedApi.createSong).not.toHaveBeenCalled()
+  })
+
+  it('polling branch shows the player with raw audio while the job is still queued', async () => {
+    mockedApi.createSong.mockResolvedValue({ songId: 's1', uploadUrl: 'https://s3/put' })
+    mockedApi.uploadFile.mockResolvedValue(undefined)
+    mockedApi.processSong.mockResolvedValue({ kind: 'started', songId: 's1', format: 'mp3', jobId: 's1.aaaa' })
+    mockedApi.getJob.mockResolvedValue({ jobId: 's1.aaaa', songId: 's1', status: 'QUEUED' } as Job)
+    mockedApi.getAudioUrls.mockResolvedValue({ urls: { raw: 'https://s3/raw?q' }, expiresInSeconds: 900 })
+    renderWithProviders(<UploadPanel />)
+    await pickAndSubmit(audioFile())
+    // The done-when in miniature: job status AND playable audio visible together.
+    await waitFor(() => expect(screen.getByText(/queued/i)).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByTestId('player-audio')).toHaveAttribute('src', 'https://s3/raw?q'),
+    )
+    expect(mockedApi.getAudioUrls).toHaveBeenCalledWith('tok', 's1')
+  })
+
+  it('linked branch shows the player for the new songId without polling', async () => {
+    mockedApi.createSong.mockResolvedValue({ songId: 's2', uploadUrl: 'https://s3/put' })
+    mockedApi.uploadFile.mockResolvedValue(undefined)
+    mockedApi.processSong.mockResolvedValue({ kind: 'linked', songId: 's2', linkedSongId: 's0', format: 'mp3' })
+    mockedApi.getAudioUrls.mockResolvedValue({
+      urls: { raw: 'https://s3/raw?l', vocals: 'https://s3/v?l', noVocals: 'https://s3/nv?l' },
+      expiresInSeconds: 900,
+    })
+    renderWithProviders(<UploadPanel />)
+    await pickAndSubmit(audioFile())
+    await waitFor(() => expect(screen.getByText(/matched an existing song/i)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('player-audio')).toBeInTheDocument())
+    expect(mockedApi.getAudioUrls).toHaveBeenCalledWith('tok', 's2')
+    expect(mockedApi.getJob).not.toHaveBeenCalled()
   })
 
   it('re-presigns once on PUT failure and continues with the new songId', async () => {
