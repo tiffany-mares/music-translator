@@ -25,3 +25,5 @@ lambda/api-layer/
 
 # Terraform plan artifacts (never commit - may embed account/resource detail)
 tfplan
+lambda/learning/target/
+lambda/learning/.m2/
