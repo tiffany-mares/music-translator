@@ -27,3 +27,27 @@ PASS - Phase 5.1 done-when met.
 (Two items — past-due "inima/heart", future-due "dor/longing" — inserted, queried, and trap-cleaned; the exclusion check is the part 3.1 never exercised.)
 
 **Verdict:** Phase 5.1 done — the vocab data model is live and queryable in its due-today shape, and the Java service skeleton is deployed and reachable. Next: 5.2 — `SpacedRepetitionService.schedule()` in isolation (reference implementation in architecture.md §5.5; the JUnit harness this phase seeded is the landing pad), unit-tested against known SM-2 reference outputs before any AWS wiring.
+
+## 5.2 — SM-2 logic in isolation
+
+**Date:** 2026-07-31
+**Files:** `SpacedRepetitionService.java` + `UserVocabProgress.java` in `lambda/learning` — pure Java, zero AWS, zero new deps. NOT deployed: 5.3 wires and deploys the first real handlers, so the next terraform plan will show 1 pending change (jar hash) — expected.
+
+**Two documented deviations from the §5.5 verbatim reference:**
+1. **Clock injection** — the reference calls `Instant.now()` directly (untestable); the service takes `java.time.Clock` (default `Clock.systemUTC()`) and uses `Instant.now(clock)`. Semantics identical.
+2. **Quality range validation** — the reference comments `/* 0-5 */` without enforcing it; q>5 would INFLATE the ease factor via the negative `(5-q)` terms (q=6 → +0.28 per review), silently corrupting schedules. Out-of-range throws `IllegalArgumentException`.
+
+**Spec properties the tests pin (some SM-2 variants differ — ours is the spec's):**
+- `easeFactor` is NOT updated on failure (quality < 3) — the earned EF survives a lapse; only interval/repetitions reset.
+- The interval multiplies by the UPDATED, floored EF (`p.getEaseFactor()` re-read after `setEaseFactor`), not the pre-update value.
+- Floor 1.3, no cap; `Math.round` half-up; `p` is mutated AND returned.
+
+**Reference tables (hand-computed, cross-checked against canonical SM-2; all verified by the suite):**
+- all q=5: intervals 1, 6, 17, 49, 147; EF 2.6→3.0 (the canonical all-perfect sequence).
+- all q=4: intervals 1, 6, 15, 38, 95; EF constant 2.5. **The 37.5 half-up boundary held**: the q=4 delta `0.1-(0.08+0.02)` is exactly 0.0 in doubles and `Math.round(37.5)=38` — no ulp drift observed.
+- all q=3: intervals 1, 6, 12, 23, 41; EF decays 2.36→1.80.
+- 5,5,5 → fail(1) → 5,5: interval ladder restarts at 1 but EF 2.8 is preserved through the lapse, then 2.9/3.0.
+
+**Suite:** 17 tests total in-container (2 Handler + 15 SM-2 incl. parameterized quality 0/1/2 and out-of-range −1/6/42), `Tests run: 17, Failures: 0` — BUILD SUCCESS via `scripts/build_learning_lambda.sh`.
+
+**Verdict:** Phase 5.2 done — SM-2 verified against known reference outputs in full isolation. Next: 5.3 — wire `POST /vocab/review` + `GET /vocab/due` to DynamoDB (IAM already granted in 5.1; done-when: a review event updates `nextReviewAt` and `/vocab/due` reflects it).
