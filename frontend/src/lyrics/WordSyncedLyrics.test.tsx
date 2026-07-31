@@ -50,21 +50,51 @@ describe('WordSyncedLyrics', () => {
   })
   afterEach(() => vi.unstubAllGlobals())
 
-  it('renders nothing until the doc arrives (no placeholder - 4.5 scope)', async () => {
+  it('shows the loading placeholder until the doc arrives, then the panel', async () => {
     let resolve!: (d: LyricsDoc) => void
     mockedApi.getLyrics.mockReturnValue(new Promise((r) => (resolve = r)))
     renderWithProviders(
-      <WordSyncedLyrics songId="s1" pipelineDone audioRef={{ current: null }} />,
+      <WordSyncedLyrics songId="s1" pipelineState="done" audioRef={{ current: null }} />,
     )
-    expect(screen.queryByTestId('lyrics-panel')).not.toBeInTheDocument()
+    expect(screen.getByText(/lyrics loading/i)).toBeInTheDocument()
     resolve(doc)
     await waitFor(() => expect(screen.getByTestId('lyrics-panel')).toBeInTheDocument())
+    expect(screen.queryByText(/lyrics loading/i)).not.toBeInTheDocument()
+  })
+
+  it('running: shows the placeholder and never fetches lyrics', async () => {
+    renderWithProviders(
+      <WordSyncedLyrics songId="s1" pipelineState="running" audioRef={{ current: null }} />,
+    )
+    expect(screen.getByText(/lyrics loading/i)).toBeInTheDocument()
+    await new Promise((r) => setTimeout(r, 30))
+    expect(mockedApi.getLyrics).not.toHaveBeenCalled()
+  })
+
+  it('failed: renders nothing (JobStatusLine owns the alert) and never fetches', async () => {
+    const { container } = renderWithProviders(
+      <WordSyncedLyrics songId="s1" pipelineState="failed" audioRef={{ current: null }} />,
+    )
+    expect(container).toBeEmptyDOMElement()
+    await new Promise((r) => setTimeout(r, 30))
+    expect(mockedApi.getLyrics).not.toHaveBeenCalled()
+  })
+
+  it("done + fetch error: shows Couldn't load lyrics instead of an eternal placeholder", async () => {
+    mockedApi.getLyrics.mockRejectedValue(new Error('500'))
+    renderWithProviders(
+      <WordSyncedLyrics songId="s1" pipelineState="done" audioRef={{ current: null }} />,
+    )
+    await waitFor(() => expect(screen.getByText(/couldn.t load lyrics/i)).toBeInTheDocument())
+    expect(screen.queryByText(/lyrics loading/i)).not.toBeInTheDocument()
   })
 
   it('highlights the word containing audio.currentTime after a frame', async () => {
     mockedApi.getLyrics.mockResolvedValue(doc)
     const audio = { currentTime: 1.6 } as unknown as HTMLAudioElement
-    renderWithProviders(<WordSyncedLyrics songId="s1" pipelineDone audioRef={{ current: audio }} />)
+    renderWithProviders(
+      <WordSyncedLyrics songId="s1" pipelineState="done" audioRef={{ current: audio }} />,
+    )
     await waitFor(() => expect(screen.getByTestId('lyrics-panel')).toBeInTheDocument())
     act(() => frame?.(0))
     expect(screen.getByText('mondo')).toHaveClass('word-active')

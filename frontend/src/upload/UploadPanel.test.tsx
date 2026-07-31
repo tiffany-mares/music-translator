@@ -161,6 +161,48 @@ describe('UploadPanel', () => {
     await waitFor(() => expect(screen.getByText('Salut')).toBeInTheDocument())
   })
 
+  it('FAILED job surfaces the alert + Try again while the player stays mounted', async () => {
+    mockedApi.createSong.mockResolvedValue({ songId: 's5', uploadUrl: 'https://s3/put' })
+    mockedApi.uploadFile.mockResolvedValue(undefined)
+    mockedApi.processSong.mockResolvedValue({ kind: 'started', songId: 's5', format: 'mp3', jobId: 's5.aaaa' })
+    mockedApi.getJob.mockResolvedValue({
+      jobId: 's5.aaaa', songId: 's5', status: 'FAILED', error: 'soundfile decode error',
+    } as Job)
+    renderWithProviders(<UploadPanel />)
+    await pickAndSubmit(audioFile())
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(/processing failed: soundfile decode error/i),
+    )
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
+    // 4.3 decision: raw playback survives a pipeline failure.
+    expect(screen.getByTestId('player-audio')).toBeInTheDocument()
+  })
+
+  it('Try again re-POSTs /process only and restarts polling under the fresh jobId', async () => {
+    mockedApi.createSong.mockResolvedValue({ songId: 's6', uploadUrl: 'https://s3/put' })
+    mockedApi.uploadFile.mockResolvedValue(undefined)
+    mockedApi.processSong
+      .mockResolvedValueOnce({ kind: 'started', songId: 's6', format: 'mp3', jobId: 's6.aaaa' })
+      .mockResolvedValueOnce({ kind: 'started', songId: 's6', format: 'mp3', jobId: 's6.bbbb' })
+    // Key on jobId: three deduped observers share one fetch per key — order-based
+    // mockResolvedValueOnce chains would be fragile here.
+    mockedApi.getJob.mockImplementation(async (_t: string, jobId: string) =>
+      jobId === 's6.aaaa'
+        ? ({ jobId, songId: 's6', status: 'FAILED', error: 'boom' } as Job)
+        : ({ jobId, songId: 's6', status: 'QUEUED' } as Job),
+    )
+    renderWithProviders(<UploadPanel />)
+    await pickAndSubmit(audioFile())
+    await waitFor(() => expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: /try again/i }))
+    await waitFor(() => expect(screen.getByText(/queued/i)).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument()
+    expect(mockedApi.createSong).toHaveBeenCalledTimes(1)
+    expect(mockedApi.uploadFile).toHaveBeenCalledTimes(1)
+    expect(mockedApi.processSong).toHaveBeenNthCalledWith(2, 'tok', 's6')
+    expect(mockedApi.getJob).toHaveBeenCalledWith('tok', 's6.bbbb')
+  })
+
   it('re-presigns once on PUT failure and continues with the new songId', async () => {
     mockedApi.createSong
       .mockResolvedValueOnce({ songId: 'old1', uploadUrl: 'https://s3/put-expired' })

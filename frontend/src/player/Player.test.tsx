@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as amplifyAuth from 'aws-amplify/auth'
@@ -110,6 +110,61 @@ describe('Player', () => {
     renderWithProviders(<Player songId="s9" jobId={null} lyricsSongId="orig0" />)
     await waitFor(() => expect(mockedApi.getLyrics).toHaveBeenCalledWith('tok', 'orig0'))
     expect(mockedApi.getAudioUrls).toHaveBeenCalledWith('tok', 's9') // audio stays on the NEW songId
+  })
+
+  it('running pipeline: shows "Lyrics loading…" under the player', async () => {
+    mockedApi.getJob.mockResolvedValue({ jobId: 's1.aaaa', songId: 's1', status: 'PROCESSING' } as Job)
+    mockedApi.getAudioUrls.mockResolvedValue(rawOnly)
+    renderWithProviders(<Player songId="s1" jobId="s1.aaaa" />)
+    await waitFor(() => expect(screen.getByText(/lyrics loading/i)).toBeInTheDocument())
+  })
+
+  it('FAILED pipeline: audio stays mounted, no "Lyrics loading…", no lyrics fetch', async () => {
+    mockedApi.getJob.mockResolvedValue({
+      jobId: 's1.aaaa', songId: 's1', status: 'FAILED', error: 'ChunkAudio: decode error',
+    } as Job)
+    mockedApi.getAudioUrls.mockResolvedValue(rawOnly)
+    renderWithProviders(<Player songId="s1" jobId="s1.aaaa" />)
+    await waitFor(() => expect(screen.getByTestId('player-audio')).toBeInTheDocument())
+    expect(screen.queryByText(/lyrics loading/i)).not.toBeInTheDocument()
+    await new Promise((r) => setTimeout(r, 30))
+    expect(mockedApi.getLyrics).not.toHaveBeenCalled()
+  })
+
+  it('audio-urls failure replaces "Preparing audio…" with an error + Retry', async () => {
+    mockedApi.getAudioUrls.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(rawOnly)
+    renderWithProviders(<Player songId="s1" jobId={null} />)
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/couldn.t load audio/i))
+    expect(screen.queryByText(/preparing audio/i)).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /^retry$/i }))
+    await waitFor(() =>
+      expect(screen.getByTestId('player-audio')).toHaveAttribute('src', 'https://s3/raw?a'),
+    )
+  })
+
+  it('media element error surfaces a Reload track affordance', async () => {
+    mockedApi.getAudioUrls.mockResolvedValue(rawOnly)
+    renderWithProviders(<Player songId="s1" jobId={null} />)
+    await waitFor(() => expect(screen.getByTestId('player-audio')).toBeInTheDocument())
+    fireEvent.error(screen.getByTestId('player-audio'))
+    expect(screen.getByRole('alert')).toHaveTextContent(/failed to load|expired/i)
+    expect(screen.getByRole('button', { name: /reload track/i })).toBeInTheDocument()
+  })
+
+  it('Reload track refetches urls and adopts the fresh src', async () => {
+    const fresh: AudioUrls = { urls: { raw: 'https://s3/raw?fresh' }, expiresInSeconds: 900 }
+    mockedApi.getAudioUrls.mockResolvedValueOnce(rawOnly).mockResolvedValueOnce(fresh)
+    renderWithProviders(<Player songId="s1" jobId={null} />)
+    await waitFor(() =>
+      expect(screen.getByTestId('player-audio')).toHaveAttribute('src', 'https://s3/raw?a'),
+    )
+    fireEvent.error(screen.getByTestId('player-audio'))
+    await userEvent.click(screen.getByRole('button', { name: /reload track/i }))
+    await waitFor(() =>
+      expect(screen.getByTestId('player-audio')).toHaveAttribute('src', 'https://s3/raw?fresh'),
+    )
+    expect(screen.queryByRole('button', { name: /reload track/i })).not.toBeInTheDocument()
+    expect(mockedApi.getAudioUrls).toHaveBeenCalledTimes(2)
   })
 
   it('keeps the playing src when a refetch re-signs the urls', async () => {

@@ -1,11 +1,14 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as amplifyAuth from 'aws-amplify/auth'
 import App from '../App'
-import { AuthProvider } from './AuthContext'
+import { renderWithProviders } from '../test/renderWithProviders'
 
 vi.mock('aws-amplify/auth')
+// The signed-in Shell mounts UploadPanel, whose top-level useJobPolling needs a
+// QueryClient (since 4.5) - so this suite renders with the full provider stack.
+vi.mock('../api/client')
 const mocked = vi.mocked(amplifyAuth)
 
 type Session = Awaited<ReturnType<typeof amplifyAuth.fetchAuthSession>>
@@ -20,11 +23,7 @@ const NEEDS_CONFIRM = { isSignedIn: false, nextStep: { signInStep: 'CONFIRM_SIGN
 
 function renderSignedOut() {
   mocked.fetchAuthSession.mockResolvedValueOnce(signedOut)
-  return render(
-    <AuthProvider>
-      <App />
-    </AuthProvider>,
-  )
+  return renderWithProviders(<App />)
 }
 
 async function fillSignIn(email: string, password: string) {

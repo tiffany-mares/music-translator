@@ -1,10 +1,13 @@
 import { useRef, useState, type FormEvent } from 'react'
 import Player from '../player/Player'
 import JobStatusLine from './JobStatusLine'
+import { useJobPolling } from './useJobPolling'
 import { useUploadFlow } from './useUploadFlow'
 
 export default function UploadPanel() {
   const { state, start, retryProcess, reset } = useUploadFlow()
+  // Same ['job', jobId] key as JobStatusLine + Player — RQ dedupes, zero extra requests.
+  const { data: polledJob } = useJobPolling(state.step === 'polling' ? state.jobId : null)
   const [title, setTitle] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const busy = state.step === 'creating' || state.step === 'uploading' || state.step === 'processing'
@@ -20,6 +23,9 @@ export default function UploadPanel() {
       <div className="upload-panel">
         <JobStatusLine jobId={state.jobId} />
         <Player songId={state.songId} jobId={state.jobId} />
+        {polledJob?.status === 'FAILED' && (
+          <button onClick={() => void retryProcess()}>Try again</button>
+        )}
       </div>
     )
   }
