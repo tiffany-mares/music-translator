@@ -5,7 +5,7 @@ import { useAuth } from '../auth/AuthContext'
 
 // Presigned GET URLs live 900s. staleTime sits just under that so a focus or
 // remount after a long idle mints fresh URLs; normal renders reuse the cache.
-// Expiry MID-playback (seek after 15 min) is an accepted 4.3 limitation - 4.5.
+// Expiry MID-playback is handled by Player's onError + Reload track since 4.5.
 const STALE_MS = 13 * 60 * 1000
 
 export function useAudioUrls(

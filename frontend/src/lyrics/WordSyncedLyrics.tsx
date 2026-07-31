@@ -4,23 +4,30 @@ import { useLyrics } from './useLyrics'
 import { useWordSync } from './useWordSync'
 import { flattenWords } from './wordSync'
 
-// Container: fetch -> flatten (memoized - useWordSync's effect deps need a
-// stable array) -> sync -> present. Renders null until the doc exists; the
-// "lyrics loading..." placeholder is 4.5's loading/error pass.
+export type PipelineState = 'running' | 'failed' | 'done'
+
+// Container: fetch -> flatten (memoized) -> sync -> present. States:
+//   running        -> "Lyrics loading…" (5.1's placeholder; useLyrics stays disabled)
+//   failed         -> null (JobStatusLine's role="alert" owns the failure; no double-alert)
+//   done + no data -> "Lyrics loading…" (fetch in flight)
+//   done + error   -> "Couldn't load lyrics."
+//   done + data    -> panel
 export default function WordSyncedLyrics({
   songId,
-  pipelineDone,
+  pipelineState,
   audioRef,
 }: {
   songId: string
-  pipelineDone: boolean
+  pipelineState: PipelineState
   audioRef: RefObject<HTMLAudioElement | null>
 }) {
-  const { data } = useLyrics(songId, pipelineDone)
+  const { data, isError } = useLyrics(songId, pipelineState === 'done')
   const flat = useMemo(() => (data ? flattenWords(data.lines) : []), [data])
   const activeIndex = useWordSync(audioRef, flat)
 
-  if (!data) return null
+  if (pipelineState === 'failed') return null
+  if (isError) return <p className="status-line">Couldn&apos;t load lyrics.</p>
+  if (!data) return <p className="status-line">Lyrics loading…</p>
   const active =
     activeIndex >= 0
       ? { lineIndex: flat[activeIndex].lineIndex, wordIndex: flat[activeIndex].wordIndex }
