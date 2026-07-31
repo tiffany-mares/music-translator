@@ -27,6 +27,29 @@ export interface AudioUrls {
   expiresInSeconds: number
 }
 
+export interface LyricsWord {
+  text: string
+  start: number // seconds
+  end: number // seconds
+}
+
+export interface LyricsLine {
+  lineNumber: number
+  originalText: string
+  // Contract: non-null by COMPLETE, but the doc shape allows null pre-translation - tolerate it.
+  translatedText: string | null
+  startTime: number
+  endTime: number
+  words: LyricsWord[] // [] is structurally valid - tolerate it
+}
+
+export interface LyricsDoc {
+  songId: string
+  sourceLanguage: string
+  targetLanguage: string
+  lines: LyricsLine[]
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly body: unknown

@@ -1,4 +1,11 @@
-import { ApiError, type AudioUrls, type CreateSongResponse, type Job, type ProcessOutcome } from './types'
+import {
+  ApiError,
+  type AudioUrls,
+  type CreateSongResponse,
+  type Job,
+  type LyricsDoc,
+  type ProcessOutcome,
+} from './types'
 
 const BASE = import.meta.env.VITE_API_BASE_URL
 
@@ -65,6 +72,15 @@ export async function getAudioUrls(token: string, songId: string): Promise<Audio
   const body = await parseJson(res)
   if (!res.ok) throw new ApiError(res.status, body)
   return body as AudioUrls
+}
+
+export async function getLyrics(token: string, songId: string): Promise<LyricsDoc> {
+  const res = await fetch(`${BASE}/songs/${songId}/lyrics`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const body = await parseJson(res)
+  if (!res.ok) throw new ApiError(res.status, body)
+  return body as LyricsDoc
 }
 
 export async function getJob(token: string, jobId: string): Promise<Job> {
