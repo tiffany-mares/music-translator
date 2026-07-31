@@ -5,7 +5,8 @@
 # shell half of the done-when is a recorded real-browser session (notes 4.1).
 # Usage: CF_DOMAIN=dxxxx.cloudfront.net API_URL=https://v7iyrsczl5.execute-api.us-east-1.amazonaws.com scripts/verify_4_1.sh
 set -euo pipefail
-export MSYS_NO_PATHCONV=1
+# NOTE: no MSYS_NO_PATHCONV here — this script's only "/paths" are inside URLs
+# (never converted), and curl's -o /dev/null NEEDS the Git Bash NUL translation.
 : "${CF_DOMAIN:?}" "${API_URL:?}"
 FAIL=0
 
