@@ -22,6 +22,11 @@ export type ProcessOutcome =
   | { kind: 'rejected'; songId: string; reason: string }
   | { kind: 'startFailed'; songId: string; format: string; error: string }
 
+export interface AudioUrls {
+  urls: { raw?: string; vocals?: string; noVocals?: string }
+  expiresInSeconds: number
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly body: unknown
