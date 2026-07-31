@@ -1,4 +1,5 @@
 import { useAuth } from './auth/AuthContext'
+import UploadPanel from './upload/UploadPanel'
 
 export default function Shell() {
   const { email, signOut } = useAuth()
@@ -12,7 +13,7 @@ export default function Shell() {
         </div>
       </header>
       <main className="shell-main">
-        <p>Your songs will appear here.</p>
+        <UploadPanel />
       </main>
     </div>
   )

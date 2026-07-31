@@ -6,6 +6,8 @@ import App from './App'
 import { renderWithProviders } from './test/renderWithProviders'
 
 vi.mock('aws-amplify/auth')
+// Shell renders UploadPanel; mock the api module so no real fetch layer loads.
+vi.mock('./api/client')
 const mocked = vi.mocked(amplifyAuth)
 
 type Session = Awaited<ReturnType<typeof amplifyAuth.fetchAuthSession>>
