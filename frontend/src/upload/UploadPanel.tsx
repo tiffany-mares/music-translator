@@ -28,7 +28,7 @@ export default function UploadPanel() {
     return (
       <div className="upload-panel">
         <p className="status-line status-complete">Ready (matched an existing song).</p>
-        <Player songId={state.songId} jobId={null} />
+        <Player songId={state.songId} jobId={null} lyricsSongId={state.linkedSongId} />
         <button onClick={reset}>Upload another</button>
       </div>
     )
