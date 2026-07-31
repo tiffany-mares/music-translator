@@ -231,3 +231,64 @@ resource "aws_lambda_permission" "apigw_validate" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
 }
+
+# ---- Phase 5.1: Java learning Lambda skeleton on the /vocab routes ----
+# Deploy = scripts/build_learning_lambda.sh first, then terraform (the jar
+# hash below flows into the plan). Stub answers 501 until 5.3.
+
+resource "aws_iam_role" "learning" {
+  name               = "lyralearn-lambda-learning"
+  assume_role_policy = file("${path.module}/../../../infra/aws/lambda-trust.json")
+}
+
+# Deliberate slight over-grant vs the empty stub: the policy already carries the
+# full Phase-5 charter (Get/Put/UpdateItem on the table + Query on GSI2) so 5.3
+# ships with zero additional IAM applies. The stub itself never calls DynamoDB.
+resource "aws_iam_role_policy" "learning" {
+  name = "lyralearn-learning-scoped"
+  role = aws_iam_role.learning.id
+  policy = replace(replace(
+    file("${path.module}/../../../infra/aws/lambda-learning-policy.json"),
+  "__REGION__", var.region), "__ACCOUNT_ID__", var.account_id)
+}
+
+resource "aws_lambda_function" "learning" {
+  function_name    = "lyralearn-learning"
+  runtime          = "java21"
+  handler          = "com.lyralearn.learning.Handler::handleRequest"
+  filename         = "${path.module}/../../../lambda/learning/target/learning-lambda.jar"
+  source_code_hash = filebase64sha256("${path.module}/../../../lambda/learning/target/learning-lambda.jar")
+  role             = aws_iam_role.learning.arn
+  timeout          = 10
+  memory_size      = 512 # JVM cold-start headroom; revisit after 5.3 has real latency numbers
+}
+
+resource "aws_apigatewayv2_integration" "learning_lambda" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.learning.invoke_arn
+  payload_format_version = "2.0"
+}
+
+# Both Phase-5 routes wired to the stub now: proves "deployed and reachable";
+# 5.3 swaps in the real handlers with no route changes. CORS already allows
+# GET/POST - untouched.
+resource "aws_apigatewayv2_route" "vocab" {
+  for_each = toset([
+    "POST /vocab/review",
+    "GET /vocab/due",
+  ])
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = each.key
+  target             = "integrations/${aws_apigatewayv2_integration.learning_lambda.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+}
+
+resource "aws_lambda_permission" "apigw_learning" {
+  statement_id  = "AllowHttpApiInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.learning.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
