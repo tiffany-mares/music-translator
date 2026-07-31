@@ -1,9 +1,9 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as amplifyAuth from 'aws-amplify/auth'
 import App from './App'
-import { AuthProvider } from './auth/AuthContext'
+import { renderWithProviders } from './test/renderWithProviders'
 
 vi.mock('aws-amplify/auth')
 const mocked = vi.mocked(amplifyAuth)
@@ -15,11 +15,7 @@ const signedInSession = {
 } as unknown as Session
 
 function renderApp() {
-  return render(
-    <AuthProvider>
-      <App />
-    </AuthProvider>,
-  )
+  return renderWithProviders(<App />)
 }
 
 describe('App auth states', () => {
