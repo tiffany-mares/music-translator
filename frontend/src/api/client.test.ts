@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createSong, getJob, toProcessOutcome, uploadFile } from './client'
+import { createSong, getAudioUrls, getJob, toProcessOutcome, uploadFile } from './client'
 import { ApiError } from './types'
 
 const fetchMock = vi.fn()
@@ -79,6 +79,25 @@ describe('toProcessOutcome', () => {
       error: 'retry',
     })
     expect(() => toProcessOutcome(502, { anything: true })).toThrow(ApiError)
+  })
+})
+
+describe('getAudioUrls', () => {
+  it('GETs /songs/{id}/audio-urls with bearer token and returns typed urls', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { urls: { raw: 'https://s3/raw?sig=1' }, expiresInSeconds: 900 }),
+    )
+    const res = await getAudioUrls('tok', 's1')
+    expect(res.urls.raw).toBe('https://s3/raw?sig=1')
+    expect(res.expiresInSeconds).toBe(900)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toContain('/songs/s1/audio-urls')
+    expect(init.headers.Authorization).toBe('Bearer tok')
+  })
+
+  it('throws ApiError on 404', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(404, { error: 'song not found' }))
+    await expect(getAudioUrls('tok', 'nope')).rejects.toMatchObject({ status: 404 })
   })
 })
 

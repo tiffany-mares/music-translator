@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react'
+import Player from '../player/Player'
 import JobStatusLine from './JobStatusLine'
 import { useUploadFlow } from './useUploadFlow'
 
@@ -18,6 +19,7 @@ export default function UploadPanel() {
     return (
       <div className="upload-panel">
         <JobStatusLine jobId={state.jobId} />
+        <Player songId={state.songId} jobId={state.jobId} />
       </div>
     )
   }
@@ -26,6 +28,7 @@ export default function UploadPanel() {
     return (
       <div className="upload-panel">
         <p className="status-line status-complete">Ready (matched an existing song).</p>
+        <Player songId={state.songId} jobId={null} />
         <button onClick={reset}>Upload another</button>
       </div>
     )

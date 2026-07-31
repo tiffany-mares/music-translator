@@ -71,3 +71,30 @@ PASS - Phase 4.1 done-when met (scripted half).
 - `scripts/verify_4_2.sh` PASS: 401 auth guards on all three endpoints, CORS preflight OK for both origins.
 
 **Verdict:** Phase 4.2 done — a real song watched from upload through pipeline completion, reflected in the UI, on both dev and the deployed app. Next: 4.3 player shell (immediate playback via `GET /songs/{id}/audio-urls` — presigned raw/vocals/noVocals URLs are already flowing; note the audio bucket CORS rule currently allows PUT only, and Web-Audio-API use in later phases will need GET added).
+
+## 4.3 — Player shell: immediate playback
+
+**Date:** 2026-07-31
+**Stack:** existing only — zero new deps, zero terraform, zero backend changes. Plain `<audio controls>` with NO `crossorigin` attribute: media elements fetch in no-CORS mode, so the audio bucket's PUT-only CORS rule needed no change. Web Audio API (4.4 word-sync sampling / 6.4 pitch) is the point where a GET rule must be added — the standing tripwire.
+
+**Design decisions:**
+- **Stem hydration via `pipelineDone` in the queryKey** (`['audioUrls', songId, pipelineDone]`): when the sibling job query (deduped — Player calls `useJobPolling(jobId)` with the same key JobStatusLine observes) transitions to COMPLETE, the key flips once and React Query fetches once; `placeholderData: keepPreviousData` bridges the change. Linked path passes `jobId=null` → `pipelineDone` true from the start → exactly one fetch (linked songs already carry whatever stems they'll ever have). At most 2 fetches per song, no polling, no effects. Deliberate tradeoff: WriteAudioKeys publishes stems ~30-60s before COMPLETE; refetching at COMPLETE sacrifices that sliver for the simplest correct trigger.
+- **The sticky-src trap (the phase's real correctness catch):** every audio-urls fetch RE-SIGNS the URLs — the string changes each time. Binding `<audio src>` to query data directly would swap src on the COMPLETE refetch and restart playback mid-song, at the exact moment the pipeline finishes. The Player adopts a URL into local state once per stem selection and never rebinds on data refresh; refetches exist to discover stems, never to refresh the playing URL. Live-validated: playback survived the COMPLETE refetch un-restarted.
+- Default stem `raw` — forced, not stylistic: the only stem guaranteed at validation time. Labels: Original / Vocals / Instrumental; buttons render only when >1 stem exists.
+- Stem switch preserves `currentTime` and best-effort resumes (`onLoadedMetadata`; autoplay-policy failures swallowed). Live-verified only — jsdom fires no media events.
+- `staleTime` 13 min against the 900s presign TTL. **Accepted limitation:** a seek past buffered data after URL expiry fails — 4.5's retry-UX territory.
+
+**Environment findings (worth their own record):**
+- **Chrome defers media loading in hidden tabs.** With the browser window covered, the `<audio>` element sat at `readyState 0 / networkState LOADING` indefinitely — `play()` pending, zero bytes fetched — while the same presigned URL curl'd 200/206. The moment the window became visible, loading and playback proceeded. Not an app bug; recorded because it cost real diagnosis time and will bite any future headless/background media testing.
+- The guarded GSI3PK de-index was denied by the session's permission layer, so cache-miss test audio came from **cutting different 30s windows of the full test song** (ffmpeg `-ss 60`/`-ss 95`) — acoustically distinct content fingerprints as genuinely new, no shared-table surgery. Reusable trick.
+- jsdom console noise: "Not implemented: HTMLMediaElement.prototype.load" — harmless, expected.
+
+**Tests:** 51 total (42 from 4.1/4.2 + getAudioUrls client 2, useAudioUrls 3, Player 4 including the sticky-src regression, UploadPanel wiring 2).
+
+**Live done-when evidence (2026-07-31):**
+- Miss run `1f616a6c521b` ("Player Test Mid 30s"): player mounted alongside "Processing — ChunkAudio…" seconds after validation (screenshot); hidden-tab stall documented above; post-COMPLETE, stems hydrated WITHOUT reload and the pipeline-produced `no_vocals.wav` played through the stem picker (user-clicked Instrumental; src `songs/1f616a6c521b/stitched/7d50cc7e15f2/.../no_vocals.wav`).
+- **The binding readout** — miss run 2 ("Immediate Playback Test", visible tab): ~12s after clicking Upload, `{currentTime: 3.91, paused: false, duration: 30}` while `jobStatus: "Processing — ChunkAudio…"`; six seconds later `currentTime: 25.3`, still PROCESSING (screenshot: player at 0:25/0:30, pause icon, processing line above). Playback started within seconds of validation, minutes before pipeline completion.
+- `scripts/verify_4_3.sh` PASS: raw presigned URL answered a ranged GET with 206 seconds after validation (LINKED variant; the strict during-pipeline assertion is the browser readout above).
+- Deployed CloudFront bundle: re-upload → instant "Ready (matched an existing song)" with all three stems and audio playing at 0:02 (screenshot).
+
+**Verdict:** Phase 4.3 done — §5.1's core UX claim holds live: a user is listening seconds after upload while the pipeline runs for minutes, and stems arrive without a reload. Next: 4.4 lyrics hydration (GET /songs/{id}/lyrics client fn + word-timing sync; adding Web Audio requires the bucket CORS GET rule).
