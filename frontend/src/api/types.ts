@@ -23,11 +23,13 @@ export type ProcessOutcome =
   | { kind: 'startFailed'; songId: string; format: string; error: string }
 
 export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    readonly body: unknown,
-  ) {
+  readonly status: number
+  readonly body: unknown
+
+  constructor(status: number, body: unknown) {
     super(`API error ${status}`)
     this.name = 'ApiError'
+    this.status = status
+    this.body = body
   }
 }
