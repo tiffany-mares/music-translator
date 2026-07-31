@@ -1,11 +1,13 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as amplifyAuth from 'aws-amplify/auth'
 import App from './App'
-import { AuthProvider } from './auth/AuthContext'
+import { renderWithProviders } from './test/renderWithProviders'
 
 vi.mock('aws-amplify/auth')
+// Shell renders UploadPanel; mock the api module so no real fetch layer loads.
+vi.mock('./api/client')
 const mocked = vi.mocked(amplifyAuth)
 
 type Session = Awaited<ReturnType<typeof amplifyAuth.fetchAuthSession>>
@@ -15,11 +17,7 @@ const signedInSession = {
 } as unknown as Session
 
 function renderApp() {
-  return render(
-    <AuthProvider>
-      <App />
-    </AuthProvider>,
-  )
+  return renderWithProviders(<App />)
 }
 
 describe('App auth states', () => {

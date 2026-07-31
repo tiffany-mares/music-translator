@@ -1,7 +1,22 @@
 variable "audio_bucket" { type = string }
+variable "frontend_origin" { type = string } # https://dxxxx.cloudfront.net
 
 resource "aws_s3_bucket" "audio" {
   bucket = var.audio_bucket
+}
+
+# Browsers preflight the presigned PUT (curl never did, which is why phases
+# 3.x passed without this). Without CORS the OPTIONS returns 403 and no
+# browser upload can succeed.
+resource "aws_s3_bucket_cors_configuration" "audio" {
+  bucket = aws_s3_bucket.audio.id
+
+  cors_rule {
+    allowed_methods = ["PUT"]
+    allowed_origins = [var.frontend_origin, "http://localhost:5173"]
+    allowed_headers = ["*"]
+    max_age_seconds = 3600
+  }
 }
 
 resource "aws_dynamodb_table" "main" {

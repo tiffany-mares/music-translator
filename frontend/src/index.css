@@ -136,3 +136,54 @@ body {
   padding: 2rem 1.2rem;
   color: #666;
 }
+
+/* --- Upload panel --- */
+.upload-panel {
+  max-width: 26rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.upload-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.upload-panel input {
+  padding: 0.55rem 0.7rem;
+  font-size: 1rem;
+  border: 1px solid #c9c9c2;
+  border-radius: 6px;
+  font-weight: 400;
+}
+
+.upload-panel button {
+  padding: 0.6rem 1.2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fafaf7;
+  background: #1a1a2e;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.upload-panel button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.status-line {
+  font-size: 1rem;
+  color: #1a1a2e;
+}
+
+.status-complete {
+  color: #2e6e46;
+  font-weight: 600;
+}
