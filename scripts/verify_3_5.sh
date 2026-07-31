@@ -9,6 +9,8 @@
 # Usage: AWS_REGION=... POOL_ID=... CLIENT_ID=... API=... scripts/verify_3_5.sh
 set -euo pipefail
 : "${AWS_REGION:?}" "${POOL_ID:?}" "${CLIENT_ID:?}" "${API:?}"
+# check_mongo_doc needs pymongo, which lives in the venv, not system python
+VENV_PY="${VENV_PY:-./lyralearn-env/Scripts/python.exe}"
 FAIL=0
 
 mint_token() {
@@ -105,7 +107,7 @@ assert d['songId']=='$A_ID' and d['targetLanguage']=='en' and d['lines'][0]['wor
 " && echo "lyrics: section 6.2 doc, songId linkage correct" \
     || { echo "lyrics: shape/linkage FAIL"; FAIL=1; }
 
-  python scripts/check_mongo_doc.py "$A_ID" \
+  "$VENV_PY" scripts/check_mongo_doc.py "$A_ID" \
     && echo "mongo: new song's doc present in Atlas (dual-write)" \
     || { echo "mongo: new doc FAIL"; FAIL=1; }
 
@@ -125,7 +127,7 @@ assert {'raw','vocals','noVocals'} <= set(u) and all('X-Amz-Signature' in v for 
 fi
 
 # backfill evidence: the pre-3.5 seeded song's doc landed in Atlas
-python scripts/check_mongo_doc.py test-song-001 \
+"$VENV_PY" scripts/check_mongo_doc.py test-song-001 \
   && echo "mongo: backfilled test-song-001 present" \
   || { echo "mongo: backfill FAIL"; FAIL=1; }
 

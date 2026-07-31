@@ -125,4 +125,52 @@ PASS - Phase 3.4 done-when met.
 
 **Final-review hardening:** fingerprint panics (e.g. symphonia's `SampleBuffer::copy_interleaved_ref` asserting on a stitched mono→stereo mp3 with a larger later-packet spec) now degrade to `VALIDATED`-without-dedup via `catch_unwind` around `fingerprint_bytes` instead of surfacing as a Lambda 500, and the gate's `FP1#` cleanup refuses to run above 10 items without `ALLOW_FP_CLEANUP=1` set.
 
+## 3.5 — Wire it all together + MongoDB migration
+
+**Date:** 2026-07-27 (code + deploy) / 2026-07-31 (secret, backfill, gate)
+**Function:** `lyralearn-validate` (Rust) gains the pipeline-start step; `lyralearn-translate` gains the Mongo dual-write; `lyralearn-api` swaps the lyrics route to Mongo-primary. Stack additions: `aws-sdk-sfn` 1 + `uuid` 1/v4 (Rust); `pymongo==4.8.0` + `dnspython==2.6.1` pinned identically in the translate container requirements, the api Lambda layer, and the local venv.
+
+**jobKey scheme:** the validate Lambda mints `jobKey` = first 12 hex chars of a UUIDv4 (dot-free), uses it verbatim as the Step Functions execution name, and returns the composite client-facing `jobId = {songId}.{jobKey}` (API splits on the LAST dot). Random names deliberately replace 2.3's deterministic naming, whose retry self-collisions (`ResourceInUse`) forced the no-Retry rule on the SageMaker task — execution names now never collide on client retry.
+
+**Start semantics:** a QUEUED `JOB#{jobKey}` item is pre-written BEFORE StartExecution so `GET /jobs/{id}` never 404s in the window between the 200 response and the state machine's own MarkProcessing write. StartExecution failure → 500 `{valid:true, songId, format, error}` with METADATA left VALIDATED and the QUEUED item tombstoned FAILED (the upload is still good; only the run failed to start). Both VALIDATED-new exits start the pipeline — clean fingerprint miss AND the 3.4 decode-degrade path — while the LINKED exit never starts anything (re-asserted by the gate: one new chunked execution total, zero from the duplicate, zero linear ever). The miss path targets ONLY `lyralearn-pipeline-chunked` (env `STATE_MACHINE_ARN`, Terraform-provided); the linear machine remains a manual tool.
+
+**WriteAudioKeys:** new native-DynamoDB ASL state between StitchResults and RunTranslation, so stems are queryable via `GET /audio-urls` before translation finishes — consistent with the progressive-hydration player (audio first, lyrics later). StitchResults now returns explicit `artifact_keys` (vocals/noVocals S3 keys) in its ResultSelector rather than the ASL hardcoding path conventions — the previous `STEM_SUBDIR` fragility (a stitch-side rename would silently break the ASL's assumed layout) is gone because the Lambda that writes the files is the single source of truth for their keys.
+
+**The five migration obligations, each fulfilled:**
+1. **Atlas M0**: cluster `Cluster0`, AWS us-east-1, host `cluster0.wvgfot9.mongodb.net`, namespace `lyralearn.lyrics`, unique index on `songId`, network access 0.0.0.0/0 (no fixed Lambda egress IP by design — TLS + SCRAM is the perimeter). Credentials live nowhere in the repo or TF state.
+2. **Secret shell-only-in-TF**: Terraform manages the `lyralearn/mongodb` Secrets Manager shell only; the value was set out-of-band via `put-secret-value` (user-run, 2026-07-31). IAM reads scoped to `arn:...:secret:lyralearn/mongodb-*` (random ARN suffix). Lambdas read once at cold start and cache the client.
+3. **Dual-write best-effort**: S3 stays the write of record; the translate Lambda's `_mongo_upsert` (`replace_one(..., upsert=True)`) logs loudly on failure but never fails the pipeline.
+4. **Mongo-primary lyrics route**: same §6.2 body from either source, discriminated by the additive `X-Lyrics-Source: mongo|s3-fallback` header. Gate observed `mongo`.
+5. **Backfill**: `scripts/backfill_lyrics_to_mongo.py` (idempotent, unique-index upserts) — `2 upserted, 0 skipped, 2 docs total in lyralearn.lyrics` (`test-song-001`, `smoke-fixture`); independently re-read by `scripts/check_mongo_doc.py`.
+
+**Packaging/deploy notes:** pymongo ships to the python3.12 api Lambda via a Docker-built layer (`scripts/build_api_layer.sh`, built inside `public.ecr.aws/lambda/python:3.12` because bson is a C extension) and to the translate container via requirements. Image tags bumped translate 2.3→3.5, stitch 2.5→3.5 (old tags never overwritten). The translate push initially produced an image Lambda rejected ("manifest not supported") — docker buildx attaches OCI attestation manifests by default; fixed with `--provenance=false --sbom=false` in the deploy script.
+
+**GSI3 race, upgraded from "left for 3.5 to weigh" (§3.4) → weighed and accepted:** two near-simultaneous uploads of the same new song can both miss the eventually-consistent GSI3 check and both run the pipeline — duplicate cost, zero corruption (both write valid, independent results). Not engineered around; revisit only if real-traffic duplicate rates make the cost material.
+
+**Measured wall time (quota-limited):** the gate's fresh upload ran QUEUED→PROCESSING→COMPLETE in ~35 min (06:55:34→07:30:03), matching the §2.4 finding that `MaxConcurrency: 1` serializes ~6 chunk jobs at ~2.5 min startup overhead each. The ~70-110s target waits on the g4dn quota-6 case (still CASE_OPENED as of 2026-07-31) and Phase 2.6.
+
+**Done-when (`scripts/verify_3_5.sh`, run 2026-07-31):** first run FAILed solely on the two Atlas doc checks — the script invoked bare `python` (no pymongo) instead of the venv interpreter; every pipeline/API/dedup assertion passed. Fixed with `VENV_PY` in the script and re-ran the two checks independently (`a4f5e4ace189`: 44 lines; `test-song-001`: 34 lines — both PASS). Full first-run output verbatim:
+```
+new song: composite jobId minted (a4f5e4ace189.c31e587bda2a)
+new song: exactly one new chunked execution
+[06:55:34 -> 07:30:03 job: PROCESSING x35 polls]
+07:30:03 job: COMPLETE
+lyrics: served from Mongo (X-Lyrics-Source: mongo)
+lyrics: section 6.2 doc, songId linkage correct
+mongo: new doc FAIL            <- harness pymongo path bug, passed on venv re-run
+audioKeys: vocals populated by live pipeline
+audioKeys: noVocals populated by live pipeline
+audio-urls: raw+vocals+noVocals presigned
+mongo: backfill FAIL           <- same harness bug, passed on venv re-run
+cache hit: linkedSongId == original (songId linkage)
+cache hit: no jobId (no pipeline)
+cache hit: status LINKED
+cache hit: audioKeys copied from original
+garbage upload: rejected 400/REJECTED
+Step Functions: one new chunked (the miss), zero others (linear 5/5, chunked 2/3)
+```
+**Postman deviation:** §10's "via Postman" wording was satisfied by the gate's scripted curl equivalents of the exact same flow (POST /songs → presigned PUT → POST /process → poll GET /jobs → GET /lyrics → GET /audio-urls; then the instant cache-hit repeat) — no separate manual Postman session was recorded.
+
+**Verdict:** Phase 3.5 done — the pass-path is wired end-to-end and all five migration obligations hold with live evidence. Next: Phase 2.6 (timing validation) the moment the quota-6 case closes, and Phase 4 (frontend) is unblocked now that upload→process→lyrics→audio-urls is a complete, authenticated API surface.
+
 **Verdict:** 3.4 done. Next: 3.5 (Step Functions pass-path wiring + the BINDING MongoDB migration). Phase 2.6 remains parked at the quota-6 gate.
