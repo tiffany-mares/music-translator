@@ -34,8 +34,9 @@ variable "chunked_max_concurrency" {
 }
 
 module "storage" {
-  source       = "./modules/storage"
-  audio_bucket = var.audio_bucket
+  source          = "./modules/storage"
+  audio_bucket    = var.audio_bucket
+  frontend_origin = "https://${module.frontend.domain_name}"
 }
 
 module "ml_processing" {
