@@ -122,7 +122,9 @@ def get_lyrics(event, claims):
             print(f"MONGO READ FAILED for {song_id}, falling back to S3: {e!r}")
     try:
         obj = _s3().get_object(Bucket=BUCKET, Key=f"songs/{song_id}/lyrics/song_lyrics.json")
-    except _s3().exceptions.NoSuchKey:
+    except _s3().exceptions.ClientError:
+        # Without s3:ListBucket, a GET on a missing key surfaces as AccessDenied,
+        # not NoSuchKey - both mean the same thing to the caller: no lyrics yet.
         return _resp(404, {"error": "lyrics not available"})
     return _lyrics_response(obj["Body"].read().decode("utf-8"), "s3-fallback")
 

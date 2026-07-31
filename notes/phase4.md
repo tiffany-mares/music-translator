@@ -98,3 +98,29 @@ PASS - Phase 4.1 done-when met (scripted half).
 - Deployed CloudFront bundle: re-upload → instant "Ready (matched an existing song)" with all three stems and audio playing at 0:02 (screenshot).
 
 **Verdict:** Phase 4.3 done — §5.1's core UX claim holds live: a user is listening seconds after upload while the pipeline runs for minutes, and stems arrive without a reload. Next: 4.4 lyrics hydration (GET /songs/{id}/lyrics client fn + word-timing sync; adding Web Audio requires the bucket CORS GET rule).
+
+## 4.4 — Lyrics hydration
+
+**Date:** 2026-07-31
+**Stack:** existing only. New `frontend/src/lyrics/` module: `wordSync.ts` (pure `flattenWords` + `activeWordAt` — the whole logic burden, 13 unit tests incl. a 500-word binary-vs-linear equivalence sweep), `useLyrics`, `useWordSync`, `LyricsPanel`, `WordSyncedLyrics`.
+
+**Design decisions:**
+- **Element-clock deviation from §5.1 (deliberate, documented):** sync samples the plain `<audio>` element's `currentTime` on requestAnimationFrame, NOT `AudioContext.currentTime`. An AudioContext is only the playback clock if media routes through it, and routing the current no-CORS media through `MediaElementAudioSourceNode` outputs SILENCE; CORS-mode buys zero functional gain for highlighting. Web Audio + the audio-bucket GET CORS rule land in 6.4 (pitch) where they're needed.
+- **Persist-until-next-start highlighting:** a word is active from its `start` until the NEXT word's `start` (Whisper leaves micro-gaps between nearly every word — strict `[start,end)` would strobe); the FINAL word clears at its own `end` (instrumental outro). Live-verified: end-state samples returned expected=-1, actual=-1.
+- **`enabled`-gate, not the useAudioUrls key-flip:** lyrics 404 for the entire QUEUED/PROCESSING window and are immutable after — so `pipelineDone` gates `enabled`, key is `['lyrics', songId]`, `staleTime: Infinity`, exactly one fetch. React Query's mount-on-enable gives hydration-without-reload for free when polling flips to COMPLETE.
+- **LyricsPanel prop seam:** the active word arrives as a prop; all rAF/clock machinery stays in `useWordSync` (setState only on index CHANGE — steady state is zero re-renders). `useMemo` on `flattenWords` is load-bearing (unstable array would re-run the sync effect every render). Word spans carry `data-start`/`data-end` — the live-gate assertion hook and a future click-to-seek seam.
+- **LINKED gap fixed frontend-side:** lyrics are keyed to the ORIGINAL songId and `get_lyrics` never follows `linkedSongId` — the linked flow passes `lyricsSongId={state.linkedSongId}` to Player (audio stays on the new songId). Future hardening: backend link-following.
+
+**Backend bug found and fixed by the gate:** a song with no lyrics doc returned **500, not the contractual 404** — S3 raises `AccessDenied` (not `NoSuchKey`) for missing keys when the role lacks `ListBucket`, and the handler only caught `NoSuchKey`. Latent since 3.2/3.5 (no prior gate probed a lyrics-less song). Fix: catch `ClientError` in the S3 fallback → 404; regression test `test_get_lyrics_s3_access_denied_is_404`; api Lambda redeployed (user-applied `0 add / 1 change / 0 destroy`).
+
+**Environment finding:** rAF pauses in hidden tabs, so the highlight freezes while the window is covered — and snaps to the correct word on the next frame once visible (observed live: two hidden-tab samples showed no highlight, the post-visibility sample matched exactly). This is correct-enough UX: invisible highlights don't need updating.
+
+**Tests:** frontend 82 (51 + 31: client 2, wordSync 13, useLyrics 4, useWordSync 2, LyricsPanel 4, WordSyncedLyrics 2, Player 3, UploadPanel 1); backend 82 (+1 regression). One plan fix during execution: the useWordSync render-count test needed a stable ref object (an inline literal re-ran the effect every render).
+
+**Live done-when evidence (2026-07-31, deployed CloudFront app):**
+- Fresh cache-miss upload "Lyrics Hydration Test" (job `b58db52b68ba.8501905c76f8`, ~11 min): during PROCESSING → `lyricsPanel: false`, zero `/lyrics` requests. At COMPLETE → panel appeared with 5 lines / 40 words, `performance.getEntriesByType('navigation').length === 1` (NO reload). Screenshots captured — the test song turns out to be Dragostea din tei, rendered with per-word spans and English translations per line.
+- Accuracy assertion (persist-until-next semantics): mid-playback sample t=11.91s → expected 25, actual 25, MATCH; end-state samples (t=30, after final word) → expected -1, actual -1, MATCH ×3.
+- Linked path: re-upload → instant "Ready (matched an existing song)" with the ORIGINAL's full lyrics + translations (fetched by linkedSongId), first word highlighted at t=0.
+- `scripts/verify_4_4.sh` PASS: 200 + `X-Lyrics-Source: mongo`, 137 words / 2 lines on the 4.3 song with valid ordered timings, no-doc 404 (post-fix).
+
+**Verdict:** Phase 4.4 done — highlighting is accurate and appears without reload the moment processing finishes, on the deployed app. Next: 4.5 loading/error states ("Lyrics loading..." placeholder, failed-job handling, retry affordance; done-when: a deliberately-forced pipeline failure surfaces a real error state).

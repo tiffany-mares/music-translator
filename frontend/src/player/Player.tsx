@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import WordSyncedLyrics from '../lyrics/WordSyncedLyrics'
 import { useJobPolling } from '../upload/useJobPolling'
 import { useAudioUrls } from './useAudioUrls'
 
@@ -11,7 +12,18 @@ const STEM_LABELS: Record<StemKey, string> = {
 }
 
 // jobId null = linked path (stems, if any, are already final - single fetch).
-export default function Player({ songId, jobId }: { songId: string; jobId: string | null }) {
+// LINKED gap fix (frontend side): lyrics are keyed to the ORIGINAL songId - the
+// backend never follows linkedSongId (recorded as future hardening), so the
+// linked flow passes lyricsSongId = linkedSongId while audio stays on songId.
+export default function Player({
+  songId,
+  jobId,
+  lyricsSongId,
+}: {
+  songId: string
+  jobId: string | null
+  lyricsSongId?: string
+}) {
   // Same queryKey as JobStatusLine's observer - React Query dedupes; no extra requests.
   const { data: job } = useJobPolling(jobId)
   const pipelineDone = jobId === null || job?.status === 'COMPLETE'
@@ -71,6 +83,11 @@ export default function Player({ songId, jobId }: { songId: string; jobId: strin
           ))}
         </div>
       )}
+      <WordSyncedLyrics
+        songId={lyricsSongId ?? songId}
+        pipelineDone={pipelineDone}
+        audioRef={audioRef}
+      />
     </div>
   )
 }

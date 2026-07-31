@@ -34,8 +34,14 @@ describe('UploadPanel', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     mockedAuth.fetchAuthSession.mockResolvedValue(session)
-    // Player renders in polling/linked branches; keep its query deterministic.
+    // Player renders in polling/linked branches; keep its queries deterministic.
     mockedApi.getAudioUrls.mockResolvedValue({ urls: { raw: 'https://s3/raw?d' }, expiresInSeconds: 900 })
+    mockedApi.getLyrics.mockResolvedValue({
+      songId: 's0',
+      sourceLanguage: 'ro',
+      targetLanguage: 'en',
+      lines: [],
+    })
   })
 
   it('runs the full started path and shows job status', async () => {
@@ -124,6 +130,35 @@ describe('UploadPanel', () => {
     await waitFor(() => expect(screen.getByTestId('player-audio')).toBeInTheDocument())
     expect(mockedApi.getAudioUrls).toHaveBeenCalledWith('tok', 's2')
     expect(mockedApi.getJob).not.toHaveBeenCalled()
+  })
+
+  it('linked branch shows the ORIGINAL songs lyrics instantly (fetched by linkedSongId)', async () => {
+    const lyricsDoc = {
+      songId: 's0',
+      sourceLanguage: 'ro',
+      targetLanguage: 'en',
+      lines: [
+        {
+          lineNumber: 1,
+          originalText: 'Salut mondo',
+          translatedText: 'Hello world',
+          startTime: 1,
+          endTime: 2,
+          words: [
+            { text: 'Salut', start: 1, end: 1.4 },
+            { text: 'mondo', start: 1.5, end: 2 },
+          ],
+        },
+      ],
+    }
+    mockedApi.createSong.mockResolvedValue({ songId: 's2', uploadUrl: 'https://s3/put' })
+    mockedApi.uploadFile.mockResolvedValue(undefined)
+    mockedApi.processSong.mockResolvedValue({ kind: 'linked', songId: 's2', linkedSongId: 's0', format: 'mp3' })
+    mockedApi.getLyrics.mockResolvedValue(lyricsDoc)
+    renderWithProviders(<UploadPanel />)
+    await pickAndSubmit(audioFile())
+    await waitFor(() => expect(mockedApi.getLyrics).toHaveBeenCalledWith('tok', 's0'))
+    await waitFor(() => expect(screen.getByText('Salut')).toBeInTheDocument())
   })
 
   it('re-presigns once on PUT failure and continues with the new songId', async () => {

@@ -27,7 +27,13 @@ class FakeDdb:
 
 class FakeS3:
     class exceptions:
-        class NoSuchKey(Exception):
+        # Mirrors boto3: NoSuchKey subclasses ClientError. Without s3:ListBucket
+        # a missing key surfaces as AccessDenied (a bare ClientError), which the
+        # handler must also map to 404.
+        class ClientError(Exception):
+            pass
+
+        class NoSuchKey(ClientError):
             pass
 
     def __init__(self, objects=None):
@@ -161,5 +167,17 @@ def test_get_lyrics_mongo_error_falls_back_to_s3(monkeypatch):
 
 def test_get_lyrics_missing_everywhere_404(monkeypatch):
     _wire(monkeypatch)
+    _wire_mongo(monkeypatch, FakeMongoColl({}))
+    assert api.handler(_event("GET /songs/{id}/lyrics", path_id="gone"), None)["statusCode"] == 404
+
+
+def test_get_lyrics_s3_access_denied_is_404(monkeypatch):
+    # Without s3:ListBucket a missing key raises AccessDenied (bare ClientError),
+    # not NoSuchKey - observed live in the 4.4 gate (was an unhandled 500).
+    class DeniedS3(FakeS3):
+        def get_object(self, Bucket, Key):
+            raise FakeS3.exceptions.ClientError("AccessDenied")
+
+    _wire(monkeypatch, s3=DeniedS3())
     _wire_mongo(monkeypatch, FakeMongoColl({}))
     assert api.handler(_event("GET /songs/{id}/lyrics", path_id="gone"), None)["statusCode"] == 404

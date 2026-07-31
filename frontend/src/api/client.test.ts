@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createSong, getAudioUrls, getJob, toProcessOutcome, uploadFile } from './client'
+import { createSong, getAudioUrls, getJob, getLyrics, toProcessOutcome, uploadFile } from './client'
 import { ApiError } from './types'
 
 const fetchMock = vi.fn()
@@ -98,6 +98,43 @@ describe('getAudioUrls', () => {
   it('throws ApiError on 404', async () => {
     fetchMock.mockResolvedValue(jsonResponse(404, { error: 'song not found' }))
     await expect(getAudioUrls('tok', 'nope')).rejects.toMatchObject({ status: 404 })
+  })
+})
+
+describe('getLyrics', () => {
+  it('GETs lyrics with the bearer token and parses the doc', async () => {
+    const doc = {
+      songId: 's1',
+      sourceLanguage: 'ro',
+      targetLanguage: 'en',
+      lines: [
+        {
+          lineNumber: 1,
+          originalText: 'Salut mondo',
+          translatedText: 'Hello world',
+          startTime: 1,
+          endTime: 2,
+          words: [
+            { text: 'Salut', start: 1, end: 1.4 },
+            { text: 'mondo', start: 1.5, end: 2 },
+          ],
+        },
+      ],
+    }
+    fetchMock.mockResolvedValue(jsonResponse(200, doc))
+    const res = await getLyrics('tok', 's1')
+    expect(res).toEqual(doc)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toContain('/songs/s1/lyrics')
+    expect(init.headers.Authorization).toBe('Bearer tok')
+  })
+
+  it('throws ApiError on the 404 that spans the whole QUEUED/PROCESSING window', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(404, { error: 'lyrics not available' }))
+    await expect(getLyrics('tok', 's1')).rejects.toMatchObject({
+      status: 404,
+      body: { error: 'lyrics not available' },
+    })
   })
 })
 

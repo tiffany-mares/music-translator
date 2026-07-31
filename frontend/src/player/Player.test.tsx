@@ -23,10 +23,36 @@ const allStems: AudioUrls = {
   expiresInSeconds: 900,
 }
 
+const lyricsDoc = {
+  songId: 's1',
+  sourceLanguage: 'ro',
+  targetLanguage: 'en',
+  lines: [
+    {
+      lineNumber: 1,
+      originalText: 'Salut mondo',
+      translatedText: 'Hello world',
+      startTime: 1,
+      endTime: 2,
+      words: [
+        { text: 'Salut', start: 1, end: 1.4 },
+        { text: 'mondo', start: 1.5, end: 2 },
+      ],
+    },
+  ],
+}
+
 describe('Player', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     mockedAuth.fetchAuthSession.mockResolvedValue(session)
+    // Linked-path tests mount lyrics immediately; keep the query quiet by default.
+    mockedApi.getLyrics.mockResolvedValue({
+      songId: 's0',
+      sourceLanguage: 'ro',
+      targetLanguage: 'en',
+      lines: [],
+    })
   })
 
   it('shows preparing state, then renders audio with the raw url', async () => {
@@ -57,6 +83,33 @@ describe('Player', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Instrumental' }))
     expect(screen.getByTestId('player-audio')).toHaveAttribute('src', 'https://s3/nv?b')
     expect(screen.getByRole('button', { name: 'Instrumental' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('does not fetch lyrics while the pipeline is still running', async () => {
+    mockedApi.getJob.mockResolvedValue({ jobId: 's1.aaaa', songId: 's1', status: 'PROCESSING' } as Job)
+    mockedApi.getAudioUrls.mockResolvedValue(rawOnly)
+    renderWithProviders(<Player songId="s1" jobId="s1.aaaa" />)
+    await waitFor(() => expect(screen.getByTestId('player-audio')).toBeInTheDocument())
+    await new Promise((r) => setTimeout(r, 50))
+    expect(mockedApi.getLyrics).not.toHaveBeenCalled()
+  })
+
+  it('hydrates lyrics once the job is COMPLETE', async () => {
+    mockedApi.getJob.mockResolvedValue({ jobId: 's1.aaaa', songId: 's1', status: 'COMPLETE' } as Job)
+    mockedApi.getAudioUrls.mockResolvedValue(allStems)
+    mockedApi.getLyrics.mockResolvedValue(lyricsDoc)
+    renderWithProviders(<Player songId="s1" jobId="s1.aaaa" />)
+    await waitFor(() => expect(screen.getByText('Salut')).toBeInTheDocument())
+    expect(screen.getByText('Hello world')).toBeInTheDocument()
+    expect(mockedApi.getLyrics).toHaveBeenCalledWith('tok', 's1')
+  })
+
+  it('fetches lyrics for lyricsSongId when it differs (linked path)', async () => {
+    mockedApi.getAudioUrls.mockResolvedValue(allStems)
+    mockedApi.getLyrics.mockResolvedValue({ ...lyricsDoc, songId: 'orig0' })
+    renderWithProviders(<Player songId="s9" jobId={null} lyricsSongId="orig0" />)
+    await waitFor(() => expect(mockedApi.getLyrics).toHaveBeenCalledWith('tok', 'orig0'))
+    expect(mockedApi.getAudioUrls).toHaveBeenCalledWith('tok', 's9') // audio stays on the NEW songId
   })
 
   it('keeps the playing src when a refetch re-signs the urls', async () => {
