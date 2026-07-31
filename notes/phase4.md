@@ -44,3 +44,30 @@ PASS - Phase 4.1 done-when met (scripted half).
 **4.2 foreshadow (do not forget):** the HTTP API's JWT authorizer validates **ID tokens** — send `session.tokens.idToken`, never the access token, in `Authorization`.
 
 **Verdict:** Phase 4.1 done — a real user signed up, logged in, and saw the authenticated shell on the deployed CloudFront app. Next: 4.2 upload + job status (POST /songs → process → React Query polling), which needs only the ID-token getter added to AuthContext plus the upload UI.
+
+## 4.2 — Upload + job status
+
+**Date:** 2026-07-31
+**Stack additions:** `@tanstack/react-query` v5 (first install; provider in main.tsx with `retry: 1` and `refetchOnWindowFocus: false` globally — a focus refetch would fight the polling backoff). Everything else rides the 4.1 stack.
+
+**Design decisions:**
+- `src/api/client.ts` is the typed API layer and the single mock boundary for component tests (fetch-level tests mock `fetch`; everything above mocks the module). Token passed per call — hooks call `useAuth().getIdToken()` immediately before each request, so amplify's `fetchAuthSession` auto-refresh gives token freshness for free (a large-file PUT can outlive short token windows). AuthContext stays the only amplify importer.
+- `POST /process` outcomes are a **discriminated union** (`started | linked | rejected | startFailed`), not exceptions — all four are legitimate UI states per the 3.5 contract. `toProcessOutcome(status, body)` narrows on (HTTP status, body shape) and throws `ApiError` for anything off-contract.
+- **Polling** (`useJobPolling`): React Query `refetchInterval` callback keyed on `query.state.dataUpdateCount` — `backoffMs = min(2000 * 2^(n-1), 15000)`, §5.1's "2s → 15s cap" verbatim; returns `false` on COMPLETE/FAILED. `refetchIntervalInBackground: true` — added after live observation (below).
+- **Upload flow** (`useUploadFlow`) is user-event driven only — no effect ever POSTs, so React 19 StrictMode's double-invoked effects can't double-create songs. PUT failure gets exactly one automatic re-presign; POST /songs mints a NEW songId, and the flow carries the fresh one forward. `retryProcess` re-POSTs process only (the 500 contract's documented recovery) — never re-uploads.
+- Client-side precheck mirrors the server bounds (50KB–25MB) and fails fast with zero network calls.
+
+**Two real gaps found by the live run (the reason live done-whens exist):**
+1. **S3 CORS was missing on the audio bucket.** Browsers preflight the presigned PUT; every 3.x gate used curl, which never preflights, so the gap was invisible until the first real browser upload (OPTIONS → 403). Fixed: `aws_s3_bucket_cors_configuration` on the audio bucket allowing PUT from the CloudFront domain + localhost:5173 (storage module gained `frontend_origin`, wired at root; user-applied `1 to add, 0 to change, 0 to destroy`).
+2. **React Query pauses interval refetching for hidden tabs** (`document.visibilityState === 'hidden'` → no polls). Observed live: job hit COMPLETE while the window was covered and the UI froze on PROCESSING. For a pipeline tracker whose run outlives the user's attention, background polling is the correct behavior → `refetchIntervalInBackground: true`.
+
+**jsdom quirk (test-only):** jsdom marks a `required` file input invalid even with files attached, so clicking submit is silently blocked by constraint validation in tests (real browsers validate correctly — verified live). Tests submit the form directly via `fireEvent.submit`; the `required` attribute stays for real-browser UX.
+
+**Tests:** 40 total (19 from 4.1 + 21 new: 2 getIdToken, 8 API client, 5 polling, 6 UploadPanel flow paths — started/linked/rejected/startFailed-retry/precheck/re-presign).
+
+**Live done-when evidence (2026-07-31):**
+- Dev server, real cache-miss run: `smoke_30s.mp3` (481KB, never fingerprinted) uploaded with title "Smoke Test 30s" → UI showed Creating → Uploading → Validating → **Queued… → Processing — ChunkAudio… → Complete — lyrics are ready.** Job `fb5b41e8c62d.5b4d803a4e17`, ~11 min wall (single 30s chunk at quota 1; started ~19:36Z, COMPLETE ~19:47Z). Screenshots captured.
+- Deployed CloudFront bundle: re-upload of the same file → instant **"Ready (matched an existing song)"** (LINKED path, no pipeline, `getJob` never called). Screenshot captured.
+- `scripts/verify_4_2.sh` PASS: 401 auth guards on all three endpoints, CORS preflight OK for both origins.
+
+**Verdict:** Phase 4.2 done — a real song watched from upload through pipeline completion, reflected in the UI, on both dev and the deployed app. Next: 4.3 player shell (immediate playback via `GET /songs/{id}/audio-urls` — presigned raw/vocals/noVocals URLs are already flowing; note the audio bucket CORS rule currently allows PUT only, and Web-Audio-API use in later phases will need GET added).
