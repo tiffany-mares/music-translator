@@ -91,3 +91,31 @@ Two real cache-miss pipeline runs total (windows -ss 160 and 190 of input_song.m
 **Suite:** 132 → **155 frontend tests / 24 files** (3 interval gating + 12 JobSocket + 7 provider + 1 kill-then-poll pin). `$default` route stays deferred.
 
 **Verdict:** Phase 6.3 done — WS is the primary status path (sub-second updates, 60s background poll), and the polling fallback demonstrably carries a job to completion after a deliberate mid-session kill. Remaining in Phase 6: 6.4 TensorFlow.js sing-along mode (CREPE, lazy-loaded, IndexedDB-cached, Web Worker), 6.5 C++ DSP core (conditional — benchmark first). Project-wide: 2.6 still quota-gated.
+
+## 6.4 — TensorFlow.js sing-along mode
+
+**Date:** 2026-08-01 · **Zero terraform** — pure frontend + a CloudFront deploy.
+
+**Scope decision (v1 = detection-only):** the spec (§5.1) pins the infrastructure — CREPE, lazy-loaded on mode open, IndexedDB-cached, Web Worker, getUserMedia mic — but no UX beyond "pitch matching", and the pipeline's `pitch.json` (at `songs/{songId}/stitched/{execName}/pitch.json`) has **no serving endpoint**. So v1 is live mic-pitch DETECTION (note name + cents deviation + Hz) over the playing instrumental. **Deferred future work:** melody-target comparison — prerequisites are a backend route serving pitch.json (+ IAM) and threading the stitched exec name / key into DynamoDB so the frontend can address it. Separate subsystem; not smuggled into 6.4.
+
+**Architecture:** `frontend/src/singalong/` — `crepeDecode.ts` (pure math: frame normalization, activation decoding, 12-TET note mapping — fully unit-tested with plain Float32Arrays), `crepeWorker.ts` (Vite module worker; tfjs dynamically imported HERE only), `useSingAlong.ts` (worker + mic orchestration; mount = mode open = the lazy boundary, unmount = teardown), `SingAlongPanel.tsx` (mounted from a Player "Sing along" toggle — the single open/close control). `FakeWorker` test harness mirrors FakeWebSocket; setup.ts needs no deletion (jsdom ships NO Worker, unlike its secret WebSocket).
+
+**Model hosting + the honest cache proof:** marl/crepe TF.js build (MIT, 13 shards + model.json, ~2.0 MB) vendored into `frontend/public/models/crepe/` with LICENSE.md — served first-party. CAVEAT: public/ deploys with `max-age=31536000,immutable`, so a second NETWORK fetch would also be fast via HTTP cache — a pure timing comparison can't distinguish the caches. The honest signal is tfjs's load source: `tf.loadLayersModel('indexeddb://crepe')` hit → "loaded from cache (IndexedDB)"; miss → HTTP `/models/crepe/model.json` → best-effort `model.save('indexeddb://crepe')` → "downloaded". The **permanent UI status line** ("Model ready in X.Xs — <source>") IS the gate evidence. Recorded: model.json is NOT content-hashed — any future model change must bump the path (`models/crepe-v2/`).
+
+**Reference-faithfulness correction:** CREPE's cents mapping is `cents(bin) = 1997.3794084376191 + 7180*bin/359` (np.linspace(0, 7180, 360) — step ~20.0056, NOT a flat 20; linspace includes both endpoints). Decode = weighted average over ±4 bins around argmax (`to_local_average_cents`); confidence = peak activation; frame normalization = zero-mean/unit-(population-)std per 1024-sample frame with silent/DC frames mapped to zeros (not NaN). All unit-pinned.
+
+**Build wiring (load-bearing):** Vite's default worker format is `iife`, which CANNOT code-split → the dynamic tfjs import inside the worker REQUIRES `worker: { format: 'es' }` (one line in vite.config.ts). `@tensorflow/tfjs@4.22.0` pinned exact. Bundle proof: main `index-*.js` 377,631 B (baseline 373,531 — +4.1 KB of toggle/panel/decode), `crepeWorker-*.js` 1.45 KB lazy chunk, tfjs `dist-*.js` 1,882 KB referenced ONLY from the worker chunk (grep-verified: 0 references from the main bundle). Live-verified: zero worker/model resources in the page's resource timing until the toggle click.
+
+**Worker runtime:** backpressure is last-wins (`pending` overwritten per frame, `drain()` processes one at a time — the awaited async `data()` makes the busy flag real); tf.tidy scopes input+intermediates, retained predict output disposed after the read; warm-up predict included in the reported ready ms (honest time-to-usable). Mic: 16 kHz AudioContext (CREPE native; Chrome resamples), ScriptProcessorNode(1024) with frames copied out and posted with a transfer list, echoCancellation/noiseSuppression/autoGainControl all off (music, not speech).
+
+**Accepted debts:** ScriptProcessorNode (deprecated) over AudioWorklet — at ~15.6 frames/s there's no user-visible win for the extra plumbing; Firefox's cross-sample-rate MediaStreamSource limitation (16 kHz context) — Chrome is the gate browser; StrictMode dev double-mount spawns/terminates an extra worker (same accepted class as JobSocket; second load is IDB-cached anyway).
+
+**The gate (live on CloudFront, tab visible throughout — the 6.3 lesson):** clean run confirmed (`indexedDB.databases()` = [] pre-open).
+- FIRST open: **"Model ready in 6.3s — downloaded"**.
+- Toggle off → on (same session): **"Model ready in 0.5s — loaded from cache (IndexedDB)"** — 12.6× faster. **THE done-when.**
+- Full page reload → reopen: **"Model ready in 0.8s — loaded from cache (IndexedDB)"** — cross-session persistence; `tensorflowjs` IDB database present.
+- Mic demo (real user humming, permission granted live): note display tracked the hum — F#4 +12 cents 372.6 Hz → F#4 +1 cents 370.2 Hz (cents readout converging) → B4 −25 cents 486.8 Hz — with "Listening…" during quiet stretches (confidence < 0.5 gate working).
+
+**Suite:** 155 → **185 frontend tests / 27 files** (10 decode + 10 hook + 8 panel + 2 player; the plan's 184 undercounted decode by one). Lint clean (4 pre-existing warnings only).
+
+**Verdict:** Phase 6.4 done — CREPE lazy-loads in a Web Worker on mode open, caches in IndexedDB, and the second open is measurably ~10× faster with the source label proving it's the IDB cache, not HTTP caching. Remaining in Phase 6: 6.5 C++ DSP core (CONDITIONAL — benchmark Basic Pitch tempo/beat quality first, build only if a gap is confirmed). Project-wide: 2.6 still quota-gated.
