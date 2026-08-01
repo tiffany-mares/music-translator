@@ -1,4 +1,5 @@
 import { useMemo, useState, type RefObject } from 'react'
+import { useAuth } from '../auth/AuthContext'
 import { buildEncounter } from '../vocab/encounter'
 import { useReviewVocab } from '../vocab/useReviewVocab'
 import LyricsPanel from './LyricsPanel'
@@ -33,6 +34,7 @@ export default function WordSyncedLyrics({
   const { data, isError } = useLyrics(songId, pipelineState === 'done')
   const flat = useMemo(() => (data ? flattenWords(data.lines) : []), [data])
   const activeIndex = useWordSync(audioRef, flat)
+  const { status } = useAuth()
   const review = useReviewVocab()
   const [savedVocabIds, setSavedVocabIds] = useState<ReadonlySet<string>>(new Set())
   const [saveError, setSaveError] = useState(false)
@@ -64,10 +66,12 @@ export default function WordSyncedLyrics({
           Couldn&apos;t save that word — click it again to retry.
         </p>
       )}
+      {/* Signed-out visitors get plain span words (the tested fallback):
+          word-saving is per-user, so the click affordance needs a session. */}
       <LyricsPanel
         lines={data.lines}
         active={active}
-        onWordClick={handleWordClick}
+        onWordClick={status === 'signedIn' ? handleWordClick : undefined}
         savedVocabIds={savedVocabIds}
       />
     </>

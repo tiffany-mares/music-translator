@@ -1,51 +1,84 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import AuthPage from './auth/AuthPage'
 import { useAuth } from './auth/AuthContext'
+import LibraryView from './library/LibraryView'
+import HowItWorks from './marketing/HowItWorks'
+import Landing from './marketing/Landing'
+import Stack from './marketing/Stack'
+import NavShell, { type View } from './nav/NavShell'
 import UploadPanel from './upload/UploadPanel'
 import ReviewPanel from './vocab/ReviewPanel'
 import { useDueVocab } from './vocab/useDueVocab'
 import { JobSocketProvider } from './ws/JobSocketContext'
 
-type View = 'listen' | 'review'
-
-// No router (repo convention: conditional render is the route guard). Both
-// views stay MOUNTED and toggle with `hidden`: switching to Review must not
-// tear down the upload session or stop audio playback — reviewing while the
-// song keeps playing is the point of the loop.
+// No router (repo convention: conditional render is the route guard). Every
+// view stays MOUNTED and toggles with `hidden`: switching views must not tear
+// down the upload session or stop audio playback — reviewing while the song
+// keeps playing is the point of the loop. Phase 7: the shell renders for
+// EVERYONE (listen/upload are public); only Review and word-saving need auth.
 export default function Shell() {
-  const { email, signOut } = useAuth()
-  const [view, setView] = useState<View>('listen')
+  const { status, email, signOut } = useAuth()
+  const signedIn = status === 'signedIn'
+  const [view, setView] = useState<View>('home')
   const { data: due } = useDueVocab()
   const dueCount = due?.count ?? 0
-  // JobSocketProvider sits under main.tsx's QueryClientProvider+AuthProvider
-  // and above both always-mounted views; mounting it here scopes the WS to the
-  // signed-in session (App unmounts Shell on sign-out = socket teardown).
+
+  // Sign-in is a view, not a gate: once the session lands, leave the form.
+  useEffect(() => {
+    if (signedIn && view === 'signin') setView('library')
+  }, [signedIn, view])
+
+  // JobSocketProvider is a no-op when signed out (it mounts the socket only
+  // for signed-in sessions); anonymous visitors get job status via polling.
   return (
     <JobSocketProvider>
-    <div className="shell">
-      <header className="shell-header">
-        <span className="wordmark">Cadenza</span>
-        <nav className="shell-nav" aria-label="View">
-          <button aria-pressed={view === 'listen'} onClick={() => setView('listen')}>
-            Listen
-          </button>
-          <button aria-pressed={view === 'review'} onClick={() => setView('review')}>
-            Review{dueCount > 0 ? ` (${dueCount})` : ''}
-          </button>
-        </nav>
-        <div className="shell-user">
-          <span>{email}</span>
-          <button onClick={() => void signOut()}>Sign out</button>
+      <NavShell
+        view={view}
+        onNavigate={setView}
+        dueCount={dueCount}
+        signedIn={signedIn}
+        email={email}
+        onSignOut={() => void signOut()}
+      >
+        <div hidden={view !== 'home'}>
+          <Landing onNavigate={setView} />
         </div>
-      </header>
-      <main className="shell-main">
-        <div hidden={view !== 'listen'}>
+        <div hidden={view !== 'how'}>
+          <HowItWorks />
+        </div>
+        <div hidden={view !== 'library'}>
+          <LibraryView onNavigate={setView} />
+        </div>
+        <div hidden={view !== 'upload'}>
           <UploadPanel />
         </div>
         <div hidden={view !== 'review'}>
-          <ReviewPanel />
+          {signedIn ? (
+            <ReviewPanel />
+          ) : (
+            <section className="mx-auto max-w-xl px-6 py-16">
+              <p className="label-mono text-brass">[ REVIEW ]</p>
+              <h1 className="font-content pt-3 text-2xl font-semibold">
+                Sign in to build your vocabulary
+              </h1>
+              <p className="pt-3 text-muted-foreground">
+                Tap words in any song to save them, then review on a spaced-repetition schedule.
+              </p>
+              <button
+                type="button"
+                className="font-button mt-6 rounded-full border border-brass bg-brass px-5 py-2.5 text-primary-foreground"
+                onClick={() => setView('signin')}
+              >
+                Sign in
+              </button>
+            </section>
+          )}
         </div>
-      </main>
-    </div>
+        <div hidden={view !== 'stack'}>
+          <Stack />
+        </div>
+        <div hidden={view !== 'signin'}>{!signedIn && <AuthPage />}</div>
+      </NavShell>
     </JobSocketProvider>
   )
 }

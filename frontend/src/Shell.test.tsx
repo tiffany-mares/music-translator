@@ -16,27 +16,31 @@ const session = {
   tokens: { idToken: { toString: () => 'tok', payload: { email: 'x@y.com' } } },
 } as unknown as Session
 
-describe('Shell navigation (5.5)', () => {
+describe('Shell navigation (7: NavShell)', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     mockedAuth.fetchAuthSession.mockResolvedValue(session)
     mockedApi.getDueVocab.mockResolvedValue({ items: [], count: 0 })
+    mockedApi.getSongs.mockResolvedValue([])
   })
 
-  it('defaults to Listen: upload form visible, review panel hidden but mounted', async () => {
+  it('defaults to Home; upload form and review panel are hidden but MOUNTED', async () => {
     renderWithProviders(<Shell />)
-    expect(screen.getByLabelText(/audio file/i)).toBeVisible()
-    // hidden, not unmounted — getByText still finds it, but it is not visible
+    expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute('aria-pressed', 'true')
+    // hidden, not unmounted — getBy* still finds them, but they are not visible
+    expect(screen.getByLabelText(/audio file/i)).not.toBeVisible()
     expect(await screen.findByText(/due for review/i)).not.toBeVisible()
   })
 
-  it('toggles views without unmounting either panel', async () => {
+  it('toggles views without unmounting any panel', async () => {
     renderWithProviders(<Shell />)
+    await userEvent.click(screen.getByRole('button', { name: 'Upload' }))
+    expect(screen.getByLabelText(/audio file/i)).toBeVisible()
     await userEvent.click(screen.getByRole('button', { name: /^review/i }))
     expect(screen.getByText(/due for review/i)).toBeVisible()
     expect(screen.getByLabelText(/audio file/i)).not.toBeVisible()
     expect(screen.getByRole('button', { name: /^review/i })).toHaveAttribute('aria-pressed', 'true')
-    await userEvent.click(screen.getByRole('button', { name: 'Listen' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Upload' }))
     expect(screen.getByLabelText(/audio file/i)).toBeVisible()
   })
 
@@ -50,5 +54,24 @@ describe('Shell navigation (5.5)', () => {
     })
     renderWithProviders(<Shell />)
     expect(await screen.findByRole('button', { name: 'Review (2)' })).toBeInTheDocument()
+  })
+
+  it('signed out: full shell renders with a Sign in nav item; Review shows the sign-in prompt', async () => {
+    mockedAuth.fetchAuthSession.mockResolvedValue({} as Session)
+    renderWithProviders(<Shell />)
+    // Listen/upload surface is fully available…
+    await userEvent.click(screen.getByRole('button', { name: 'Upload' }))
+    expect(screen.getByLabelText(/audio file/i)).toBeVisible()
+    // …and vocab never fetches without a session.
+    expect(mockedApi.getDueVocab).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: /^review/i }))
+    expect(screen.getByText(/sign in to build your vocabulary/i)).toBeVisible()
+  })
+
+  it('Sign in nav item opens the auth view', async () => {
+    mockedAuth.fetchAuthSession.mockResolvedValue({} as Session)
+    renderWithProviders(<Shell />)
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(screen.getByRole('form', { name: /sign in/i })).toBeVisible()
   })
 })

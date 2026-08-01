@@ -30,11 +30,15 @@ describe('App auth states', () => {
     mockedApi.getDueVocab.mockResolvedValue({ items: [], count: 0 })
   })
 
-  it('shows loading, then the sign-in form when no session exists', async () => {
+  // Phase 7: signed out no longer gates the app - the full shell renders with
+  // a Sign in nav item; the form appears only when that view is opened.
+  it('shows loading, then the public shell with a Sign in nav item when no session exists', async () => {
     mocked.fetchAuthSession.mockResolvedValue(signedOutSession)
     renderApp()
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
-    expect(await screen.findByRole('form', { name: /sign in/i })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(screen.getByRole('form', { name: /sign in/i })).toBeInTheDocument()
   })
 
   it('shows the shell with the user email when a session exists', async () => {
@@ -44,12 +48,13 @@ describe('App auth states', () => {
     expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument()
   })
 
-  it('signs out back to the sign-in form', async () => {
+  it('signs out back to the anonymous shell', async () => {
     mocked.fetchAuthSession.mockResolvedValue(signedInSession)
     mocked.signOut.mockResolvedValue(undefined as never)
     renderApp()
     await userEvent.click(await screen.findByRole('button', { name: /sign out/i }))
     expect(mocked.signOut).toHaveBeenCalled()
-    expect(await screen.findByRole('form', { name: /sign in/i })).toBeInTheDocument()
+    // Back to the anonymous shell: the Sign in nav item returns.
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
   })
 })
