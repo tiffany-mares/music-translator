@@ -1,0 +1,17 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ConnectionRowWrite",
+      "Effect": "Allow",
+      "Action": "dynamodb:PutItem",
+      "Resource": "arn:aws:dynamodb:__REGION__:__ACCOUNT_ID__:table/WebSocketConnections"
+    },
+    {
+      "Sid": "OwnLogsOnly",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:__REGION__:__ACCOUNT_ID__:log-group:/aws/lambda/lyralearn-ws-connect*"
+    }
+  ]
+}

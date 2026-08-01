@@ -92,3 +92,7 @@ output "cloudfront_distribution_id" {
 output "cloudfront_domain" {
   value = module.frontend.domain_name
 }
+
+output "ws_endpoint" {
+  value = module.api.ws_endpoint
+}
