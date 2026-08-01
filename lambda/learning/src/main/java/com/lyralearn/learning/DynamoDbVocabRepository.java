@@ -106,6 +106,41 @@ public class DynamoDbVocabRepository implements VocabRepository {
     }
 
     @Override
+    public List<DueItem> queryAll(String userId) {
+        // Same GSI2 walk as queryDue minus the range condition: every vocab
+        // item, ascending nextReviewAt (GSI2SK) - soonest review first.
+        List<DueItem> out = new ArrayList<>();
+        Map<String, AttributeValue> start = null;
+        do {
+            QueryRequest.Builder qb = QueryRequest.builder()
+                    .tableName(tableName)
+                    .indexName("GSI2")
+                    .keyConditionExpression("GSI2PK = :u")
+                    .expressionAttributeValues(Map.of(
+                            ":u", AttributeValue.fromS("USER#" + userId)));
+            if (start != null) {
+                qb.exclusiveStartKey(start);
+            }
+            QueryResponse res = ddb.query(qb.build());
+            for (Map<String, AttributeValue> item : res.items()) {
+                String sk = item.get("SK").s();
+                if (!sk.startsWith(VOCAB_PREFIX)) {
+                    continue;
+                }
+                out.add(new DueItem(
+                        sk.substring(VOCAB_PREFIX.length()),
+                        attrS(item, "term"),
+                        attrS(item, "definition"),
+                        attrS(item, "songId"),
+                        item.get("nextReviewAt").s()));
+            }
+            start = res.lastEvaluatedKey() == null || res.lastEvaluatedKey().isEmpty()
+                    ? null : res.lastEvaluatedKey();
+        } while (start != null);
+        return out;
+    }
+
+    @Override
     public List<DueItem> queryDue(String userId, Instant now) {
         List<DueItem> out = new ArrayList<>();
         Map<String, AttributeValue> start = null;

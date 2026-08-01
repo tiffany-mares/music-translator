@@ -72,9 +72,18 @@ public class VocabService {
         return out;
     }
 
+    /** The user's whole collection, soonest next-review first (GET /vocab). */
+    public JsonObject all(String userId) {
+        return itemsResponse(repo.queryAll(userId));
+    }
+
     public JsonObject due(String userId) {
         Instant now = Instant.now(clock).truncatedTo(ChronoUnit.SECONDS);
         List<DueItem> items = repo.queryDue(userId, now);
+        return itemsResponse(items);
+    }
+
+    private static JsonObject itemsResponse(List<DueItem> items) {
         JsonArray arr = new JsonArray();
         for (DueItem d : items) {
             JsonObject o = new JsonObject();

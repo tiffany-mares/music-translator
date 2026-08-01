@@ -43,6 +43,7 @@ describe('ReviewPanel', () => {
     vi.resetAllMocks()
     mockedAuth.fetchAuthSession.mockResolvedValue(session)
     mockedApi.getDueVocab.mockResolvedValue(due)
+    mockedApi.getAllVocab.mockResolvedValue({ items: [], count: 0 })
     mockedApi.getQuiz.mockResolvedValue({ questions: [ctxQ, noCtxQ], count: 2 })
     mockedApi.reviewVocab.mockResolvedValue({
       vocabId: 'inimă', nextReviewAt: '2026-08-02T00:00:00Z',
@@ -122,5 +123,51 @@ describe('ReviewPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Good' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(/couldn.t save/i)
     expect(screen.getByRole('button', { name: 'Good' })).toBeEnabled()
+  })
+})
+
+
+// --- Phase 7 follow-up: the collection shows when nothing is due -------------
+
+describe('ReviewPanel collection (nothing due)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    mockedAuth.fetchAuthSession.mockResolvedValue(session)
+    mockedApi.getDueVocab.mockResolvedValue({ items: [], count: 0 })
+  })
+
+  it('lists previously reviewed words with their next review dates', async () => {
+    mockedApi.getAllVocab.mockResolvedValue({
+      items: [
+        { vocabId: 'inimă', term: 'inimă', definition: 'heart', songId: null,
+          nextReviewAt: '2026-08-05T00:00:00Z' },
+        { vocabId: 'dor', term: 'dor', definition: 'longing', songId: 's1',
+          nextReviewAt: '2026-09-01T00:00:00Z' },
+      ],
+      count: 2,
+    })
+    renderWithProviders(<ReviewPanel />)
+    expect(await screen.findByText(/nothing due/i)).toBeInTheDocument()
+    expect(await screen.findByText('Your collection')).toBeInTheDocument()
+    expect(await screen.findByText('inimă')).toBeInTheDocument()
+    expect(screen.getByText('longing')).toBeInTheDocument()
+    expect(screen.getByText(`Next: ${formatDay('2026-09-01T00:00:00Z')}`)).toBeInTheDocument()
+  })
+
+  it('empty collection invites saving words', async () => {
+    mockedApi.getAllVocab.mockResolvedValue({ items: [], count: 0 })
+    renderWithProviders(<ReviewPanel />)
+    expect(await screen.findByText(/no words saved yet/i)).toBeInTheDocument()
+  })
+
+  it('never fetches the collection while words are due', async () => {
+    mockedApi.getDueVocab.mockResolvedValue({
+      items: [{ vocabId: 'a', term: 'a', definition: 'x', songId: null,
+                nextReviewAt: '2026-01-01T00:00:00Z' }],
+      count: 1,
+    })
+    renderWithProviders(<ReviewPanel />)
+    expect(await screen.findByText('Due for review')).toBeInTheDocument()
+    expect(mockedApi.getAllVocab).not.toHaveBeenCalled()
   })
 })

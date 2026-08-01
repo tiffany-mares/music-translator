@@ -1,3 +1,4 @@
+import { useAllVocab } from './useAllVocab'
 import { useDueVocab } from './useDueVocab'
 import { useQuizSession } from './useQuizSession'
 
@@ -21,6 +22,8 @@ const GRADES: { label: string; quality: number }[] = [
 
 export default function ReviewPanel() {
   const { data: due, isError: dueError } = useDueVocab()
+  const nothingDue = due?.count === 0
+  const { data: collection, isError: collectionError } = useAllVocab(nothingDue)
   const { state, start, reveal, answer, next, answering } = useQuizSession()
 
   if (state.phase === 'loading') return <p className="status-line">Preparing quiz…</p>
@@ -96,7 +99,32 @@ export default function ReviewPanel() {
         </p>
       )}
       {!due && !dueError && <p className="status-line">Loading…</p>}
-      {due && due.count === 0 && <p className="status-line">Nothing due. Nice work.</p>}
+      {due && due.count === 0 && (
+        <>
+          <p className="status-line">Nothing due. Nice work.</p>
+          <h2 className="review-heading">Your collection</h2>
+          {collectionError && (
+            <p role="alert" className="auth-error">
+              Couldn&apos;t load your collection.
+            </p>
+          )}
+          {!collection && !collectionError && <p className="status-line">Loading…</p>}
+          {collection && collection.count === 0 && (
+            <p className="status-line">No words saved yet — tap words in any song to collect them.</p>
+          )}
+          {collection && collection.count > 0 && (
+            <ul className="due-list">
+              {collection.items.map((item) => (
+                <li key={item.vocabId} className="due-item">
+                  <span className="due-term">{item.term}</span>
+                  <span className="due-definition">{item.definition || '—'}</span>
+                  <span className="due-date">Next: {formatDay(item.nextReviewAt)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
       {due && due.count > 0 && (
         <>
           <ul className="due-list">

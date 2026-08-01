@@ -235,6 +235,29 @@ class HandlerTest {
         assertTrue(item.get("songId").isJsonNull()); // unlinked item -> explicit null
     }
 
+    // ---- GET /vocab (the whole collection, Phase 7 follow-up) ----
+
+    @Test
+    void allReturnsEveryOwnedItemSoonestFirstIncludingFutureOnes() {
+        repo.seed(SUB, "due1", 2.5, 1, 0, "2026-07-01T00:00:00Z", "inima", "heart");
+        repo.seed(SUB, "future1", 2.5, 30, 5, "2030-01-01T00:00:00Z", "dor", "longing");
+        repo.seed("other-user", "theirs", 2.5, 1, 0, "2026-07-01T00:00:00Z", "x", "y");
+        APIGatewayV2HTTPResponse res = handler()
+                .handleRequest(event("GET", "/vocab", null, SUB, false), null);
+        assertEquals(200, res.getStatusCode());
+        JsonObject b = body(res);
+        assertEquals(2, b.get("count").getAsInt());
+        assertEquals("due1", b.getAsJsonArray("items").get(0).getAsJsonObject().get("vocabId").getAsString());
+        assertEquals("future1", b.getAsJsonArray("items").get(1).getAsJsonObject().get("vocabId").getAsString());
+    }
+
+    @Test
+    void allWithoutSubIs401() {
+        APIGatewayV2HTTPResponse res = handler()
+                .handleRequest(event("GET", "/vocab", null, null, false), null);
+        assertEquals(401, res.getStatusCode());
+    }
+
     // ---- 5.4: songId plumbing ----
 
     @Test

@@ -63,6 +63,16 @@ class InMemoryVocabRepository implements VocabRepository {
     }
 
     @Override
+    public List<DueItem> queryAll(String userId) {
+        List<DueItem> out = new ArrayList<>();
+        items.values().stream()
+                .filter(s -> s.userId().equals(userId))
+                .sorted(Comparator.comparing(Stored::gsi2sk))
+                .forEach(s -> out.add(new DueItem(s.vocabId(), s.term(), s.definition(), s.songId(), s.nextReviewAt())));
+        return out;
+    }
+
+    @Override
     public List<DueItem> queryDue(String userId, Instant now) {
         String nowIso = now.toString();
         List<DueItem> out = new ArrayList<>();
