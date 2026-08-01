@@ -81,7 +81,9 @@ export default function LibraryView({
         </div>
       ) : (songs ?? []).length === 0 ? (
         <div className="flex flex-col items-center py-16 text-center">
-          <Vinyl size={200} />
+          <span className="hold-bob inline-block">
+            <Vinyl size={200} />
+          </span>
           <p className="mt-8 font-content text-3xl">Add your first song</p>
           <p className="mt-2 max-w-sm text-sm text-muted-foreground">
             Anything you already love <span className="text-sage">singing along</span> to works

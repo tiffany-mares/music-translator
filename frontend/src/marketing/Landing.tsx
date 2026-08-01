@@ -3,6 +3,8 @@ import { ArrowRight, HelpCircle, Library, Plus } from 'lucide-react'
 import heroUrl from '../assets/cadenza-hero-watercolor.png'
 import type { View } from '../nav/NavShell'
 import { MarketingFooter } from './Footer'
+import NoteDrift from './NoteDrift'
+import Typewriter from './Typewriter'
 import { WaveDivider } from './ornaments'
 import { useScrollReveal } from './useScrollReveal'
 
@@ -345,6 +347,8 @@ export default function Landing({ onNavigate }: { onNavigate: (view: View) => vo
           <div className="absolute inset-0 bg-[linear-gradient(to_top,var(--background)_0%,transparent_30%)]" />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_60%,transparent_0%,var(--background)_70%)] opacity-50" />
           <div className="absolute inset-0 bg-background/20" />
+          {/* ambient drifting notes over the watercolor (Recompile petal-drift, transposed) */}
+          <NoteDrift />
         </div>
 
         <div className="relative z-10 mx-auto max-w-6xl px-5 py-8 sm:px-8">
@@ -354,6 +358,18 @@ export default function Landing({ onNavigate }: { onNavigate: (view: View) => vo
                 [ {t} ] {a} {b ? <span className="text-brass">{b}</span> : null}
               </p>
             ))}
+            {/* live terminal line: Recompile-style rotating typewriter + caret */}
+            <p className="label-mono text-muted-foreground">
+              [ NOW ]{' '}
+              <Typewriter
+                phrases={[
+                  'separating stems…',
+                  'timing every word…',
+                  'translating the line…',
+                  'lifting the melody…',
+                ]}
+              />
+            </p>
           </div>
 
           <p className="label-mono reveal mt-6 text-muted-foreground">
