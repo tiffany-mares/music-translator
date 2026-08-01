@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as amplifyAuth from 'aws-amplify/auth'
@@ -19,6 +19,9 @@ const session = {
 describe('Shell navigation (7: NavShell)', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    // Deep-link sync (urlView): pushState from earlier tests persists on the
+    // shared jsdom location - start every test at the home path.
+    window.history.replaceState(null, '', '/')
     mockedAuth.fetchAuthSession.mockResolvedValue(session)
     mockedApi.getDueVocab.mockResolvedValue({ items: [], count: 0 })
     mockedApi.getSongs.mockResolvedValue([])
@@ -37,15 +40,18 @@ describe('Shell navigation (7: NavShell)', () => {
 
   it('toggles views without unmounting any panel', async () => {
     renderWithProviders(<Shell />)
-    await userEvent.click(screen.getByRole('button', { name: 'Upload' }))
+    // Nav queries scoped: unscoped role scans over the mounted marketing DOM
+    // are too slow in jsdom.
+    const nav = within(screen.getByRole('navigation', { name: 'View' }))
+    await userEvent.click(nav.getByRole('button', { name: 'Upload' }))
     expect(screen.getByLabelText(/audio file/i)).toBeVisible()
-    await userEvent.click(screen.getByRole('button', { name: /^review/i }))
+    await userEvent.click(nav.getByRole('button', { name: /^review/i }))
     expect(screen.getByText(/due for review/i)).toBeVisible()
     expect(screen.getByLabelText(/audio file/i)).not.toBeVisible()
-    expect(screen.getByRole('button', { name: /^review/i })).toHaveAttribute('aria-pressed', 'true')
-    await userEvent.click(screen.getByRole('button', { name: 'Upload' }))
+    expect(nav.getByRole('button', { name: /^review/i })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(nav.getByRole('button', { name: 'Upload' }))
     expect(screen.getByLabelText(/audio file/i)).toBeVisible()
-  })
+  }, 15000)
 
   it('shows the due count on the Review tab only when nonzero', async () => {
     mockedApi.getDueVocab.mockResolvedValue({
@@ -66,12 +72,13 @@ describe('Shell navigation (7: NavShell)', () => {
   it('signed out: full shell renders with a Sign in nav item; Review shows the sign-in prompt', async () => {
     mockedAuth.fetchAuthSession.mockResolvedValue({} as Session)
     renderWithProviders(<Shell />)
+    const nav = within(screen.getByRole('navigation', { name: 'View' }))
     // Listen/upload surface is fully available…
-    await userEvent.click(screen.getByRole('button', { name: 'Upload' }))
+    await userEvent.click(nav.getByRole('button', { name: 'Upload' }))
     expect(screen.getByLabelText(/audio file/i)).toBeVisible()
     // …and vocab never fetches without a session.
     expect(mockedApi.getDueVocab).not.toHaveBeenCalled()
-    await userEvent.click(screen.getByRole('button', { name: /^review/i }))
+    await userEvent.click(nav.getByRole('button', { name: /^review/i }))
     expect(screen.getByText(/sign in to build your vocabulary/i)).toBeVisible()
   })
 
@@ -81,4 +88,24 @@ describe('Shell navigation (7: NavShell)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(screen.getByRole('form', { name: /sign in/i })).toBeVisible()
   })
+
+  it('initializes the view from a deep-link path', async () => {
+    window.history.replaceState(null, '', '/upload')
+    renderWithProviders(<Shell />)
+    expect(screen.getByLabelText(/audio file/i)).toBeVisible()
+  })
+
+  it('nav clicks update the URL; back restores the previous view', async () => {
+    renderWithProviders(<Shell />)
+    const nav = within(screen.getByRole('navigation', { name: 'View' }))
+    await userEvent.click(nav.getByRole('button', { name: 'Upload' }))
+    expect(window.location.pathname).toBe('/upload')
+    await userEvent.click(nav.getByRole('button', { name: 'Stack' }))
+    expect(window.location.pathname).toBe('/stack')
+    window.history.back()
+    // jsdom fires popstate asynchronously after history.back(); the views are
+    // always-mounted, so wait on VISIBILITY (existence is always true).
+    await waitFor(() => expect(screen.getByLabelText(/audio file/i)).toBeVisible())
+    expect(window.location.pathname).toBe('/upload')
+  }, 15000)
 })

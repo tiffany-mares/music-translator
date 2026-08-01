@@ -62,6 +62,27 @@ def _resp(status, payload):
             "body": json.dumps(payload, ensure_ascii=False)}
 
 
+# Anonymous uploads trigger paid GPU processing; a per-IP daily counter caps
+# the worst case (signed-in uploads are attributable and exempt). Item:
+# RATE#{ip}/DAY#{yyyymmdd}, expiresAt TTL two days out so counters self-clean.
+ANON_DAILY_UPLOAD_LIMIT = 10
+
+
+def _anon_over_quota(event):
+    ip = (event.get("requestContext", {}).get("http", {}) or {}).get("sourceIp", "unknown")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    resp = _ddb().update_item(
+        TableName=TABLE,
+        Key={"PK": {"S": f"RATE#{ip}"}, "SK": {"S": f"DAY#{now:%Y%m%d}"}},
+        UpdateExpression="ADD uploads :one SET expiresAt = :ttl",
+        ExpressionAttributeValues={
+            ":one": {"N": "1"},
+            ":ttl": {"N": str(int(now.timestamp()) + 2 * 86400)},
+        },
+        ReturnValues="ALL_NEW")
+    return int(resp["Attributes"]["uploads"]["N"]) > ANON_DAILY_UPLOAD_LIMIT
+
+
 def post_songs(event, claims):
     body = json.loads(event.get("body") or "{}")
     song_id = uuid.uuid4().hex[:12]
@@ -69,6 +90,8 @@ def post_songs(event, claims):
     # Public route (Phase 7): uploads need no account. Signed-in users still
     # arrive with claims via the frontend's optional auth header.
     user = claims.get("sub", "anonymous")
+    if user == "anonymous" and _anon_over_quota(event):
+        return _resp(429, {"error": "Daily upload limit reached — sign in or try again tomorrow."})
     raw_key = f"songs/{song_id}/raw/input.mp3"
     _ddb().put_item(TableName=TABLE, Item={
         "PK": {"S": f"SONG#{song_id}"}, "SK": {"S": "METADATA"},
@@ -148,7 +171,7 @@ def get_audio_urls(event, claims):
 # Statuses that never belong in the public catalog: not-yet-uploaded shells,
 # rejected files, and LINKED duplicates (the canonical original is already
 # listed - fingerprint dedup is what keeps the shared library duplicate-free).
-CATALOG_HIDDEN_STATUSES = {"AWAITING_UPLOAD", "REJECTED", "LINKED"}
+CATALOG_HIDDEN_STATUSES = {"AWAITING_UPLOAD", "REJECTED", "LINKED", "ARCHIVED"}
 
 
 def get_songs(event, claims):
@@ -174,7 +197,9 @@ def get_songs(event, claims):
         "status": it.get("status", {}).get("S", ""),
         "createdAt": it.get("createdAt", {}).get("S", ""),
         "sourceLanguage": it["sourceLanguage"]["S"] if "sourceLanguage" in it else None,
-    } for it in items if it.get("status", {}).get("S") not in CATALOG_HIDDEN_STATUSES]
+    } for it in items
+        if it.get("status", {}).get("S") not in CATALOG_HIDDEN_STATUSES
+        and "status" in it]  # status-less shells are malformed, never listable
     songs.sort(key=lambda s: s["createdAt"], reverse=True)
     return _resp(200, {"songs": songs})
 

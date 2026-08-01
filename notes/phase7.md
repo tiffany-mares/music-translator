@@ -36,3 +36,12 @@ The public library currently lists historical verify-run uploads ("6.2 Push Gate
 ## Deferred (recorded)
 
 Router + deep-linkable URLs; CAPTCHA / per-IP upload quotas; static-PK GSI for the catalog; server-side language filter; catalog junk cleanup; truly attributing anonymous uploads (e.g. per-browser pseudo-identity) if the library ever needs moderation.
+
+## Phase 7 follow-ups (2026-08-01, branch phase7-followups)
+
+Closed three of the four recorded deferrals; the fourth stays deferred with its trigger unmet:
+
+1. **Deep links without a router** — `src/nav/urlView.ts` mirrors the Shell's view state to real paths (`/`, `/how-it-works`, `/library`, `/upload`, `/review`, `/stack`, `/signin`, and `/song/{id}` for a selected library song) via pushState/popstate; CloudFront's 4.1 SPA fallback makes every path refreshable (all verified 200 live). LibraryView's selection is now controlled by the Shell so song deep links work. Testing gotcha recorded: jsdom shares `location` across tests in a file — every Shell/App/AuthPage test now resets to `/` in beforeEach, and popstate assertions must wait on VISIBILITY (views are always-mounted, existence is always true). Adopt a real router only if nested routing outgrows this.
+2. **Anonymous per-IP daily upload quota** — `POST /songs` (anonymous only; signed-in exempt) increments `RATE#{ip}/DAY#{yyyymmdd}` (TTL'd via new table TTL on `expiresAt`, self-cleans in 2 days) and 429s past ANON_DAILY_UPLOAD_LIMIT=10 with a human-facing message the upload UI surfaces (`friendlyError` maps ApiError body.error). Live-verified: anon POST → 201 + counter item present. CAPTCHA stays deferred (no abuse observed; quota caps the GPU-spend worst case at ~10 pipeline runs/day/IP).
+3. **Catalog cleanup (soft-archive)** — new ARCHIVED status hidden by GET /songs; `scripts/archive_songs.py` (reversible: stores previousStatus, `--restore` puts it back; handles status-less malformed shells via if_not_exists). Live run archived 19 test entries ("6.2 Push Gate"×2, "Dedup Original"×4, "Different Song Control"×4, forced-failure/verify/smoke/hydration/playback tests, "3.5 Wire Full Pipeline", "Valid Upload Test", and the malformed songId "s" shell). **Catalog now: 4 songs** (the anon-gate upload, the 6.3/6.4 gate cuts, and the full "Dragostea din tei"). The catalog also now defensively excludes status-less items (code change rides the next api apply).
+4. **Static-PK GSI** — still deferred: 4-song catalog, the Scan trigger has not fired.
