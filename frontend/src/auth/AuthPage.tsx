@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Disc3 } from 'lucide-react'
 import { useAuth } from './AuthContext'
+import PasswordField from './PasswordField'
 import { authErrorMessage } from './authErrors'
 
 type Mode = 'signIn' | 'signUp' | 'confirm'
@@ -100,17 +101,7 @@ export default function AuthPage() {
             Email
             <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
           </label>
-          <label className={labelCls}>
-            Password
-            <input
-              className={inputCls}
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </label>
+          <PasswordField value={password} onChange={setPassword} autoComplete="current-password" />
           <button type="submit" disabled={pending} className={submitCls}>
             Sign in
           </button>
@@ -128,17 +119,7 @@ export default function AuthPage() {
             Email
             <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
           </label>
-          <label className={labelCls}>
-            Password
-            <input
-              className={inputCls}
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="new-password"
-            />
-          </label>
+          <PasswordField value={password} onChange={setPassword} autoComplete="new-password" />
           <p className="text-xs text-muted-foreground">At least 12 characters, with an uppercase letter, a lowercase letter, and a number.</p>
           <button type="submit" disabled={pending} className={submitCls}>
             Create account
