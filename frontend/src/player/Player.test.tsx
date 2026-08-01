@@ -1,9 +1,10 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as amplifyAuth from 'aws-amplify/auth'
 import * as api from '../api/client'
 import type { AudioUrls, Job } from '../api/types'
+import { FakeWorker } from '../test/fakeWorker'
 import { renderWithProviders } from '../test/renderWithProviders'
 import Player from './Player'
 
@@ -182,5 +183,35 @@ describe('Player', () => {
     // The re-signed fetch landed (stem buttons appear) but the adopted src must not change.
     await waitFor(() => expect(screen.getByRole('button', { name: 'Instrumental' })).toBeInTheDocument())
     expect(screen.getByTestId('player-audio')).toHaveAttribute('src', 'https://s3/raw?first')
+  })
+
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('Sing along toggle mounts the panel; nothing worker-ish loads before the click', async () => {
+    vi.stubGlobal('Worker', FakeWorker)
+    FakeWorker.reset()
+    mockedApi.getAudioUrls.mockResolvedValue(rawOnly)
+    renderWithProviders(<Player songId="s1" jobId={null} />)
+    await waitFor(() => expect(screen.getByTestId('player-audio')).toBeInTheDocument())
+    expect(FakeWorker.instances).toHaveLength(0) // lazy: no worker until opened
+    const toggle = screen.getByRole('button', { name: /sing along/i })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText(/loading pitch model/i)).toBeInTheDocument()
+    expect(FakeWorker.instances).toHaveLength(1)
+  })
+
+  it('toggling Sing along off unmounts the panel and terminates the worker', async () => {
+    vi.stubGlobal('Worker', FakeWorker)
+    FakeWorker.reset()
+    mockedApi.getAudioUrls.mockResolvedValue(rawOnly)
+    renderWithProviders(<Player songId="s1" jobId={null} />)
+    await waitFor(() => expect(screen.getByTestId('player-audio')).toBeInTheDocument())
+    const toggle = screen.getByRole('button', { name: /sing along/i })
+    await userEvent.click(toggle)
+    await userEvent.click(toggle)
+    expect(screen.queryByText(/loading pitch model/i)).not.toBeInTheDocument()
+    expect(FakeWorker.last().terminated).toBe(true)
   })
 })
