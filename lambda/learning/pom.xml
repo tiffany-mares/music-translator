@@ -18,6 +18,7 @@
     <!-- Reproducible builds: identical jar bytes for identical sources, so
          filebase64sha256 in terraform stays stable across no-op rebuilds. -->
     <project.build.outputTimestamp>2026-01-01T00:00:00Z</project.build.outputTimestamp>
+    <aws.sdk.version>2.25.70</aws.sdk.version>
   </properties>
 
   <dependencies>
@@ -32,7 +33,36 @@
       <artifactId>aws-lambda-java-events</artifactId>
       <version>3.14.0</version>
     </dependency>
-    <!-- NO DynamoDB SDK in 5.1: the stub never touches the table (that's 5.3). -->
+    <!-- 5.3: DynamoDB via AWS SDK v2. netty/apache HTTP clients excluded; the
+         lightweight url-connection client keeps the shaded jar small and the
+         JVM cold start lower. -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>dynamodb</artifactId>
+      <version>${aws.sdk.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>netty-nio-client</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>apache-client</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>url-connection-client</artifactId>
+      <version>${aws.sdk.version}</version>
+    </dependency>
+    <!-- Request parse + response build via JsonObject only (no reflection:
+         shade-safe, explicit type validation). -->
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>2.11.0</version>
+    </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
@@ -55,6 +85,19 @@
         <version>3.5.2</version>
         <configuration>
           <createDependencyReducedPom>false</createDependencyReducedPom>
+          <!-- SDK jars ship module-info + signature files; excluding them keeps
+               the fat jar clean and the reproducible-hash property intact. -->
+          <filters>
+            <filter>
+              <artifact>*:*</artifact>
+              <excludes>
+                <exclude>module-info.class</exclude>
+                <exclude>META-INF/*.SF</exclude>
+                <exclude>META-INF/*.DSA</exclude>
+                <exclude>META-INF/*.RSA</exclude>
+              </excludes>
+            </filter>
+          </filters>
         </configuration>
         <executions>
           <execution>

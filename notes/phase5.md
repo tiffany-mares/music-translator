@@ -51,3 +51,43 @@ PASS - Phase 5.1 done-when met.
 **Suite:** 17 tests total in-container (2 Handler + 15 SM-2 incl. parameterized quality 0/1/2 and out-of-range −1/6/42), `Tests run: 17, Failures: 0` — BUILD SUCCESS via `scripts/build_learning_lambda.sh`.
 
 **Verdict:** Phase 5.2 done — SM-2 verified against known reference outputs in full isolation. Next: 5.3 — wire `POST /vocab/review` + `GET /vocab/due` to DynamoDB (IAM already granted in 5.1; done-when: a review event updates `nextReviewAt` and `/vocab/due` reflects it).
+
+## 5.3 — Wire the endpoints
+
+**Date:** 2026-07-31
+**Deploy:** zero terraform file edits — 5.1's IAM over-grant and route wiring paid off exactly as planned; the apply was `0 to add, 1 to change, 0 to destroy` (jar hash only, absorbing the 5.2 deferral too). Lambda updated in 13s.
+
+**API contract (defined this phase — spec only had the §5.2 table notes):**
+- `POST /vocab/review` body `{"vocabId","quality":0-5,"term"?,"definition"?}` → 200 `{"vocabId","nextReviewAt","intervalDays","repetitions","easeFactor","created"}`; 400 bad body/quality (non-number, non-integer, out-of-range, bad base64), 404 unknown item without `term`, 401 no sub claim.
+- `GET /vocab/due` → 200 `{"items":[{vocabId,term,definition,nextReviewAt}],"count"}` — GSI2 query `GSI2PK = :u AND GSI2SK <= :now`, range-ascending so most-overdue first for free; GSI2 projects ALL so no follow-up reads.
+
+**Create-on-first-review:** the spec has NO create-vocab endpoint anywhere — §5.5's frontend will create-on-encounter. So review does `GetItem` first: absent + `term` in body → first review of a new item (SM-2 defaults EF 2.5/reps 0/interval 0), absent without `term` → 404, present → load + `schedule()` + upsert. One `UpdateItem` (upsert semantics) serves both paths; response carries `"created"` so 5.5 can distinguish.
+
+**Mixed-precision ISO finding (correctness-critical, unit-pinned):** `Instant.toString()` is *variable-precision* (`…:00Z` vs `…:00.123Z`), and mixed precision breaks GSI2's lexicographic==chronological invariant *within a second* (`"…00.5Z" < "…00Z"` lexically). All persisted instants and the due-query `:now` are `truncatedTo(SECONDS)` → fixed-width, matching the 5.1 seeds and shell `date -u`. Related invariant: the UpdateExpression reuses the same `:next` value for `nextReviewAt` AND `GSI2SK` — the index key cannot drift from the attribute.
+
+**Architecture:** thin `VocabRepository` interface (loadProgress/saveReview/queryDue) as the test seam. `DynamoDbVocabRepository` is marshalling-only (paginated GSI2 query, `BigDecimal.toPlainString()` for the N value, `#t/#d` name indirection for term/definition) and is proven live by the verify script — no dynamodb-local in this toolchain. All routing/JSON/error/SM-2-integration logic tested through `Handler`+`VocabService` against `InMemoryVocabRepository` (mirrors GSI2's ISO-string-compare semantics) with a fixed `Clock`. Missing sub claim → 401 (authorizer guarantees it in prod; 401 signals misconfiguration where 500 would mislabel). Table name via `TABLE_NAME` env default `LyraLearnTable` — python precedent (`lambda/api/handler.py`), no terraform `environment` block needed.
+
+**Deps:** AWS SDK v2 2.25.70 `dynamodb` + `url-connection-client` (netty/apache excluded — jar 7.6MB, cold start comfortably inside the 10s timeout on first live invoke); Gson 2.11.0 used WITHOUT reflection (`JsonObject`/`JsonParser` only — shade-safe, explicit type validation of quality incl. the 4.5-is-not-an-integer case). Shade filters added for `module-info.class` + signature files. Known accepted risk: hand-seeded items missing §6.1 attributes would NPE→500 in `loadProgress`; only writers are this Lambda + verify scripts.
+
+**Suite:** 31 in-container (15 SM-2 + 16 handler; the plan's estimate said 30 — miscounted the handler list), `Tests run: 31, Failures: 0`.
+
+**Done-when gate (`scripts/verify_5_3.sh`, run 2026-07-31 against the live API, first-try PASS):**
+```
+seed: past-due verify53-item written
+due before review: 200, contains verify53-item
+review: 200, nextReviewAt=2026-08-02T00:35:38Z (future), reps 0->1, interval 1
+due after review: verify53-item no longer due
+item attrs: repetitions=1
+item attrs: lastReviewedAt=2026-08-01T00:35:38Z
+item attrs: GSI2SK == nextReviewAt
+unknown item, no term: 404 OK
+create-on-review: 200 created
+create-on-review: item persisted (term=dor, reps=1)
+create-on-review: not in today's due list (due tomorrow)
+quality 7: 400 OK
+no token: 401 OK
+PASS - Phase 5.3 done-when met.
+```
+(All items trap-cleaned. The script's `[[ "$NEXT" > "$NOW" ]]` string comparison is sound ONLY because of the fixed-width truncation above.)
+
+**Verdict:** Phase 5.3 done — both /vocab endpoints live against DynamoDB; a review event updates `nextReviewAt` and `/vocab/due` reflects it immediately. Next: 5.4 — quiz generation from processed lyrics.
