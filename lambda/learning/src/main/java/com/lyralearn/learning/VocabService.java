@@ -42,6 +42,7 @@ public class VocabService {
         int quality = requireQuality(req);
         String term = optString(req, "term");
         String definition = optString(req, "definition");
+        String songId = optString(req, "songId"); // 5.4: lyric-context link, optional
 
         UserVocabProgress p = repo.loadProgress(userId, vocabId).orElse(null);
         boolean created = (p == null);
@@ -59,7 +60,7 @@ public class VocabService {
         p.setNextReviewAt(p.getNextReviewAt().truncatedTo(ChronoUnit.SECONDS));
         Instant lastReviewedAt = Instant.now(clock).truncatedTo(ChronoUnit.SECONDS);
 
-        repo.saveReview(userId, vocabId, p, lastReviewedAt, term, definition);
+        repo.saveReview(userId, vocabId, p, lastReviewedAt, term, definition, songId);
 
         JsonObject out = new JsonObject();
         out.addProperty("vocabId", vocabId);
@@ -80,6 +81,7 @@ public class VocabService {
             o.addProperty("vocabId", d.vocabId());
             o.addProperty("term", d.term());
             o.addProperty("definition", d.definition());
+            o.addProperty("songId", d.songId()); // null -> explicit JSON null, additive for 5.5
             o.addProperty("nextReviewAt", d.nextReviewAt());
             arr.add(o);
         }

@@ -59,7 +59,7 @@ public class DynamoDbVocabRepository implements VocabRepository {
 
     @Override
     public void saveReview(String userId, String vocabId, UserVocabProgress p,
-                           Instant lastReviewedAt, String term, String definition) {
+                           Instant lastReviewedAt, String term, String definition, String songId) {
         Map<String, AttributeValue> vals = new HashMap<>();
         // BigDecimal.valueOf(..).toPlainString(): plain decimal, never
         // scientific notation, so DynamoDB always accepts the N value.
@@ -88,6 +88,10 @@ public class DynamoDbVocabRepository implements VocabRepository {
             names.put("#d", "definition");
             vals.put(":def", AttributeValue.fromS(definition));
             expr.append(", #d = :def");
+        }
+        if (songId != null) {
+            vals.put(":sid", AttributeValue.fromS(songId));
+            expr.append(", songId = :sid");
         }
 
         UpdateItemRequest.Builder req = UpdateItemRequest.builder()
@@ -126,6 +130,7 @@ public class DynamoDbVocabRepository implements VocabRepository {
                         sk.substring(VOCAB_PREFIX.length()),
                         attrS(item, "term"),
                         attrS(item, "definition"),
+                        attrS(item, "songId"),   // GSI2 projects ALL - present automatically
                         item.get("nextReviewAt").s()));
             }
             start = res.hasLastEvaluatedKey() ? res.lastEvaluatedKey() : null;

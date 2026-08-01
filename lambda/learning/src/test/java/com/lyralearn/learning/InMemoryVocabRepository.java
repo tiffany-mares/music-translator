@@ -13,7 +13,7 @@ class InMemoryVocabRepository implements VocabRepository {
 
     record Stored(String userId, String vocabId, double easeFactor, int intervalDays,
                   int repetitions, String nextReviewAt, String lastReviewedAt,
-                  String term, String definition, String gsi2sk) {}
+                  String term, String definition, String songId, String gsi2sk) {}
 
     final Map<String, Stored> items = new HashMap<>();
 
@@ -23,8 +23,13 @@ class InMemoryVocabRepository implements VocabRepository {
 
     void seed(String userId, String vocabId, double ef, int intervalDays, int reps,
               String nextReviewAt, String term, String definition) {
+        seed(userId, vocabId, ef, intervalDays, reps, nextReviewAt, term, definition, null);
+    }
+
+    void seed(String userId, String vocabId, double ef, int intervalDays, int reps,
+              String nextReviewAt, String term, String definition, String songId) {
         items.put(key(userId, vocabId), new Stored(userId, vocabId, ef, intervalDays,
-                reps, nextReviewAt, null, term, definition, nextReviewAt));
+                reps, nextReviewAt, null, term, definition, songId, nextReviewAt));
     }
 
     Stored get(String userId, String vocabId) {
@@ -45,7 +50,7 @@ class InMemoryVocabRepository implements VocabRepository {
 
     @Override
     public void saveReview(String userId, String vocabId, UserVocabProgress p,
-                           Instant lastReviewedAt, String term, String definition) {
+                           Instant lastReviewedAt, String term, String definition, String songId) {
         Stored prev = items.get(key(userId, vocabId));
         String next = p.getNextReviewAt().toString();
         items.put(key(userId, vocabId), new Stored(userId, vocabId,
@@ -53,6 +58,7 @@ class InMemoryVocabRepository implements VocabRepository {
                 next, lastReviewedAt.toString(),
                 term != null ? term : (prev != null ? prev.term() : null),
                 definition != null ? definition : (prev != null ? prev.definition() : null),
+                songId != null ? songId : (prev != null ? prev.songId() : null),
                 next)); // gsi2sk == nextReviewAt, like the UpdateExpression
     }
 
@@ -64,7 +70,7 @@ class InMemoryVocabRepository implements VocabRepository {
                 .filter(s -> s.userId().equals(userId))
                 .filter(s -> s.gsi2sk().compareTo(nowIso) <= 0)
                 .sorted(Comparator.comparing(Stored::gsi2sk))
-                .forEach(s -> out.add(new DueItem(s.vocabId(), s.term(), s.definition(), s.nextReviewAt())));
+                .forEach(s -> out.add(new DueItem(s.vocabId(), s.term(), s.definition(), s.songId(), s.nextReviewAt())));
         return out;
     }
 }
