@@ -17,10 +17,12 @@ public interface VocabRepository {
     /**
      * Upsert the post-schedule state: easeFactor/intervalDays/repetitions/
      * nextReviewAt/lastReviewedAt + GSI2PK/GSI2SK (GSI2SK == nextReviewAt by
-     * construction). term/definition written only when non-null (create path).
+     * construction). term/definition/songId written only when non-null
+     * (create path; songId is 5.4's lyric-context link, sent by 5.5's
+     * create-on-encounter).
      */
     void saveReview(String userId, String vocabId, UserVocabProgress p,
-                    Instant lastReviewedAt, String term, String definition);
+                    Instant lastReviewedAt, String term, String definition, String songId);
 
     /** GSI2 due-today query: GSI2PK = USER#{userId} AND GSI2SK <= now (ISO). */
     List<DueItem> queryDue(String userId, Instant now);

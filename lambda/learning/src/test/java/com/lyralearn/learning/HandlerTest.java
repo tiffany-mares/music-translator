@@ -213,6 +213,34 @@ class HandlerTest {
         assertEquals("inima", item.get("term").getAsString());
         assertEquals("heart", item.get("definition").getAsString());
         assertEquals("2026-07-01T00:00:00Z", item.get("nextReviewAt").getAsString());
+        assertTrue(item.get("songId").isJsonNull()); // unlinked item -> explicit null
+    }
+
+    // ---- 5.4: songId plumbing ----
+
+    @Test
+    void reviewCreateWithSongIdPersistsIt() {
+        handler().handleRequest(event("POST", "/vocab/review",
+                "{\"vocabId\":\"dor\",\"quality\":5,\"term\":\"dor\",\"definition\":\"longing\",\"songId\":\"song-9\"}",
+                SUB, false), null);
+        assertEquals("song-9", repo.get(SUB, "dor").songId());
+    }
+
+    @Test
+    void reviewWithoutSongIdPreservesExistingLink() {
+        repo.seed(SUB, "word1", 2.5, 0, 0, "2026-07-01T00:00:00Z", "inima", "heart", "song-1");
+        handler().handleRequest(event("POST", "/vocab/review",
+                "{\"vocabId\":\"word1\",\"quality\":5}", SUB, false), null);
+        assertEquals("song-1", repo.get(SUB, "word1").songId());
+    }
+
+    @Test
+    void duePropagatesSongId() {
+        repo.seed(SUB, "word1", 2.5, 1, 0, "2026-07-01T00:00:00Z", "inima", "heart", "song-1");
+        APIGatewayV2HTTPResponse res = handler()
+                .handleRequest(event("GET", "/vocab/due", null, SUB, false), null);
+        JsonObject item = body(res).getAsJsonArray("items").get(0).getAsJsonObject();
+        assertEquals("song-1", item.get("songId").getAsString());
     }
 
     @Test
