@@ -299,3 +299,129 @@ resource "aws_lambda_permission" "apigw_learning" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
 }
+
+# ---- Phase 6.1: WebSocket API + Go $connect/$disconnect Lambdas ----
+# Build = scripts/build_ws_lambda.sh first (zips must exist before plan - the
+# hashes below flow into it). Auth is in-handler: WebSocket APIs cannot use
+# the HTTP JWT authorizer, so the connect Lambda validates the same Cognito
+# ID token (query param `token`, same issuer/audience) per architecture.md §9.
+# No $default route yet - no client->server messages exist until 6.2/6.3.
+
+resource "aws_iam_role" "ws_connect" {
+  name               = "lyralearn-lambda-ws-connect"
+  assume_role_policy = file("${path.module}/../../../infra/aws/lambda-trust.json")
+}
+
+resource "aws_iam_role_policy" "ws_connect" {
+  name = "lyralearn-ws-connect-scoped"
+  role = aws_iam_role.ws_connect.id
+  policy = replace(replace(
+    file("${path.module}/../../../infra/aws/lambda-ws-connect-policy.json"),
+  "__REGION__", var.region), "__ACCOUNT_ID__", var.account_id)
+}
+
+resource "aws_iam_role" "ws_disconnect" {
+  name               = "lyralearn-lambda-ws-disconnect"
+  assume_role_policy = file("${path.module}/../../../infra/aws/lambda-trust.json")
+}
+
+resource "aws_iam_role_policy" "ws_disconnect" {
+  name = "lyralearn-ws-disconnect-scoped"
+  role = aws_iam_role.ws_disconnect.id
+  policy = replace(replace(
+    file("${path.module}/../../../infra/aws/lambda-ws-disconnect-policy.json"),
+  "__REGION__", var.region), "__ACCOUNT_ID__", var.account_id)
+}
+
+resource "aws_lambda_function" "ws_connect" {
+  function_name    = "lyralearn-ws-connect"
+  runtime          = "provided.al2023"
+  handler          = "bootstrap"
+  filename         = "${path.module}/../../../lambda/ws/dist/connect.zip"
+  source_code_hash = filebase64sha256("${path.module}/../../../lambda/ws/dist/connect.zip")
+  role             = aws_iam_role.ws_connect.arn
+  timeout          = 10
+  memory_size      = 128 # Go: ms cold starts, one PutItem - smallest tier is plenty
+
+  environment {
+    variables = {
+      TABLE_NAME     = "WebSocketConnections"
+      COGNITO_ISSUER = "https://cognito-idp.us-east-1.amazonaws.com/${aws_cognito_user_pool.users.id}"
+      CLIENT_ID      = aws_cognito_user_pool_client.web.id
+    }
+  }
+}
+
+resource "aws_lambda_function" "ws_disconnect" {
+  function_name    = "lyralearn-ws-disconnect"
+  runtime          = "provided.al2023"
+  handler          = "bootstrap"
+  filename         = "${path.module}/../../../lambda/ws/dist/disconnect.zip"
+  source_code_hash = filebase64sha256("${path.module}/../../../lambda/ws/dist/disconnect.zip")
+  role             = aws_iam_role.ws_disconnect.arn
+  timeout          = 10
+  memory_size      = 128
+
+  environment {
+    variables = {
+      TABLE_NAME = "WebSocketConnections"
+    }
+  }
+}
+
+resource "aws_apigatewayv2_api" "ws" {
+  name                       = "lyralearn-ws-api"
+  protocol_type              = "WEBSOCKET"
+  route_selection_expression = "$request.body.action"
+}
+
+# WebSocket integrations are 1.0-only: no payload_format_version here.
+resource "aws_apigatewayv2_integration" "ws_connect" {
+  api_id           = aws_apigatewayv2_api.ws.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = aws_lambda_function.ws_connect.invoke_arn
+}
+
+resource "aws_apigatewayv2_integration" "ws_disconnect" {
+  api_id           = aws_apigatewayv2_api.ws.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = aws_lambda_function.ws_disconnect.invoke_arn
+}
+
+resource "aws_apigatewayv2_route" "ws_connect" {
+  api_id    = aws_apigatewayv2_api.ws.id
+  route_key = "$connect"
+  target    = "integrations/${aws_apigatewayv2_integration.ws_connect.id}"
+}
+
+resource "aws_apigatewayv2_route" "ws_disconnect" {
+  api_id    = aws_apigatewayv2_api.ws.id
+  route_key = "$disconnect"
+  target    = "integrations/${aws_apigatewayv2_integration.ws_disconnect.id}"
+}
+
+# WebSocket APIs reject the special "$default" stage name (HTTP-API-only);
+# the stage name is a path segment in the wss URL.
+resource "aws_apigatewayv2_stage" "ws" {
+  api_id      = aws_apigatewayv2_api.ws.id
+  name        = "prod"
+  auto_deploy = true
+}
+
+resource "aws_lambda_permission" "ws_connect" {
+  statement_id  = "AllowWsApiInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.ws_connect.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.ws.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "ws_disconnect" {
+  statement_id  = "AllowWsApiInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.ws_disconnect.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.ws.execution_arn}/*/*"
+}
+
+output "ws_endpoint" { value = aws_apigatewayv2_stage.ws.invoke_url }
