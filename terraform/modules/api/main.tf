@@ -131,6 +131,14 @@ resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.http.id
   name        = "$default"
   auto_deploy = true
+
+  # Phase 7: the listen/upload path is public (anonymous uploads trigger paid
+  # GPU processing), so cap the request rate stage-wide. Modest numbers - the
+  # app's own polling is 1 req/15-60s per client.
+  default_route_settings {
+    throttling_rate_limit  = 10
+    throttling_burst_limit = 20
+  }
 }
 
 resource "aws_apigatewayv2_authorizer" "cognito" {
@@ -152,9 +160,12 @@ resource "aws_apigatewayv2_integration" "api_lambda" {
   payload_format_version = "2.0"
 }
 
+# Phase 7 (user decision): the whole listen/upload path is PUBLIC - browse,
+# play, and upload need no account. Only /vocab/* keeps the JWT authorizer.
 resource "aws_apigatewayv2_route" "routes" {
   for_each = toset([
     "POST /songs",
+    "GET /songs",
     "GET /jobs/{id}",
     "GET /songs/{id}/lyrics",
     "GET /songs/{id}/audio-urls",
@@ -162,8 +173,7 @@ resource "aws_apigatewayv2_route" "routes" {
   api_id             = aws_apigatewayv2_api.http.id
   route_key          = each.key
   target             = "integrations/${aws_apigatewayv2_integration.api_lambda.id}"
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+  authorization_type = "NONE"
 }
 
 resource "aws_lambda_permission" "apigw" {
@@ -220,8 +230,8 @@ resource "aws_apigatewayv2_route" "process" {
   api_id             = aws_apigatewayv2_api.http.id
   route_key          = "POST /songs/{id}/process"
   target             = "integrations/${aws_apigatewayv2_integration.validate_lambda.id}"
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+  # Public (Phase 7): the validate lambda reads no claims - it works off songId.
+  authorization_type = "NONE"
 }
 
 resource "aws_lambda_permission" "apigw_validate" {
