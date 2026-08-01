@@ -181,3 +181,65 @@ def test_get_lyrics_s3_access_denied_is_404(monkeypatch):
     _wire(monkeypatch, s3=DeniedS3())
     _wire_mongo(monkeypatch, FakeMongoColl({}))
     assert api.handler(_event("GET /songs/{id}/lyrics", path_id="gone"), None)["statusCode"] == 404
+
+
+# --- Phase 7 (lovable-reskin): public global library listing -----------------
+
+def _meta_item(song_id, status, created, title="t", source_language=None):
+    item = {"PK": {"S": f"SONG#{song_id}"}, "SK": {"S": "METADATA"},
+            "title": {"S": title}, "artist": {"S": "artist"},
+            "status": {"S": status}, "createdAt": {"S": created}}
+    if source_language is not None:
+        item["sourceLanguage"] = {"S": source_language}
+    return item
+
+
+class ScanningFakeDdb(FakeDdb):
+    """Serves scan() in pages of 2 to prove the handler follows LastEvaluatedKey."""
+
+    def __init__(self, scan_items):
+        super().__init__()
+        self.scan_items = scan_items
+        self.scan_calls = []
+
+    def scan(self, **kwargs):
+        self.scan_calls.append(kwargs)
+        start = kwargs.get("ExclusiveStartKey", 0)
+        page = self.scan_items[start:start + 2]
+        out = {"Items": page}
+        if start + 2 < len(self.scan_items):
+            out["LastEvaluatedKey"] = start + 2
+        return out
+
+
+def test_get_songs_is_public_filters_statuses_and_sorts_newest_first(monkeypatch):
+    ddb = ScanningFakeDdb([
+        _meta_item("aaa", "VALIDATED", "2026-07-01T00:00:00+00:00", title="Old",
+                   source_language="ro"),
+        _meta_item("bbb", "AWAITING_UPLOAD", "2026-07-02T00:00:00+00:00"),
+        _meta_item("ccc", "REJECTED", "2026-07-03T00:00:00+00:00"),
+        _meta_item("ddd", "LINKED", "2026-07-04T00:00:00+00:00"),
+        _meta_item("eee", "VALIDATED", "2026-07-05T00:00:00+00:00", title="New"),
+    ])
+    _wire(monkeypatch, ddb=ddb)
+    # NO authorizer at all: the route is public.
+    resp = api.handler({"routeKey": "GET /songs", "requestContext": {}}, None)
+    assert resp["statusCode"] == 200
+    songs = json.loads(resp["body"])["songs"]
+    assert [s["songId"] for s in songs] == ["eee", "aaa"]  # newest first, hidden statuses gone
+    assert songs[0]["sourceLanguage"] is None
+    assert songs[1] == {"songId": "aaa", "title": "Old", "artist": "artist",
+                        "status": "VALIDATED", "createdAt": "2026-07-01T00:00:00+00:00",
+                        "sourceLanguage": "ro"}
+    assert len(ddb.scan_calls) == 3  # 5 items in pages of 2 -> pagination followed
+
+
+def test_post_songs_anonymous_upload_records_anonymous_uploader(monkeypatch):
+    ddb = FakeDdb()
+    _wire(monkeypatch, ddb=ddb)
+    resp = api.handler({"routeKey": "POST /songs", "requestContext": {},
+                        "body": json.dumps({"title": "Anon Song"})}, None)
+    assert resp["statusCode"] == 201
+    item = ddb.put_calls[0]
+    assert item["uploadedBy"]["S"] == "anonymous"
+    assert item["GSI1PK"]["S"] == "USER#anonymous"

@@ -14,11 +14,11 @@ export function useLyrics(
   songId: string | null,
   pipelineDone: boolean,
 ): UseQueryResult<LyricsDoc, Error> {
-  const { getIdToken } = useAuth()
+  const { getOptionalIdToken } = useAuth()
   return useQuery({
     queryKey: ['lyrics', songId],
     enabled: songId !== null && pipelineDone,
-    queryFn: async () => getLyrics(await getIdToken(), songId!),
+    queryFn: async () => getLyrics(await getOptionalIdToken(), songId!),
     staleTime: Infinity,
   })
 }

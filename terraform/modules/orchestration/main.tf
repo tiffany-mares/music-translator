@@ -17,7 +17,7 @@ locals {
   lambda_defs = {
     translate = { fn = "lyralearn-translate", role = "lyralearn-lambda-translate",
       policy_name = "lyralearn-translate-scoped", policy_file = "lambda-translate-policy.json",
-    tag = "3.5", memory = 4096, env = { MONGODB_SECRET_ARN = var.mongodb_secret_arn } }
+    tag = "3.5", memory = 4096, env = { MONGODB_SECRET_ARN = var.mongodb_secret_arn, TABLE_NAME = "LyraLearnTable" } }
     chunk = { fn = "lyralearn-chunk-audio", role = "lyralearn-lambda-chunk",
       policy_name = "lyralearn-chunk-scoped", policy_file = "lambda-chunk-policy.json",
     tag = "2.4", memory = 2048, env = {} }

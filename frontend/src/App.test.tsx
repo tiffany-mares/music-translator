@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as amplifyAuth from 'aws-amplify/auth'
@@ -30,12 +30,19 @@ describe('App auth states', () => {
     mockedApi.getDueVocab.mockResolvedValue({ items: [], count: 0 })
   })
 
-  it('shows loading, then the sign-in form when no session exists', async () => {
+  // Phase 7: signed out no longer gates the app - the full shell renders with
+  // a Sign in nav item; the form appears only when that view is opened.
+  it('shows loading, then the public shell with a Sign in nav item when no session exists', async () => {
     mocked.fetchAuthSession.mockResolvedValue(signedOutSession)
     renderApp()
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
-    expect(await screen.findByRole('form', { name: /sign in/i })).toBeInTheDocument()
-  })
+    // Scoped to the sidebar footer area via the nav landmark's parent: the
+    // marketing pages make unscoped role scans too slow under suite load.
+    const aside = (await screen.findByRole('navigation', { name: 'View' })).closest('aside')!
+    expect(await within(aside as HTMLElement).findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+    await userEvent.click(within(aside as HTMLElement).getByRole('button', { name: 'Sign in' }))
+    expect(screen.getByRole('form', { name: /sign in/i })).toBeInTheDocument()
+  }, 15000)
 
   it('shows the shell with the user email when a session exists', async () => {
     mocked.fetchAuthSession.mockResolvedValue(signedInSession)
@@ -44,12 +51,13 @@ describe('App auth states', () => {
     expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument()
   })
 
-  it('signs out back to the sign-in form', async () => {
+  it('signs out back to the anonymous shell', async () => {
     mocked.fetchAuthSession.mockResolvedValue(signedInSession)
     mocked.signOut.mockResolvedValue(undefined as never)
     renderApp()
     await userEvent.click(await screen.findByRole('button', { name: /sign out/i }))
     expect(mocked.signOut).toHaveBeenCalled()
-    expect(await screen.findByRole('form', { name: /sign in/i })).toBeInTheDocument()
+    // Back to the anonymous shell: the Sign in nav item returns.
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
   })
 })

@@ -20,6 +20,7 @@ interface AuthContextValue {
   resendCode: (email: string) => Promise<void>
   signOut: () => Promise<void>
   getIdToken: () => Promise<string>
+  getOptionalIdToken: () => Promise<string | null>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -86,9 +87,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return token
   }, [])
 
+  // Public routes (Phase 7): signed-out visitors send no auth header at all.
+  // Signed-in users still send the token so uploads are attributed to them.
+  const getOptionalIdToken = useCallback(async (): Promise<string | null> => {
+    try {
+      return (await fetchAuthSession()).tokens?.idToken?.toString() ?? null
+    } catch {
+      return null
+    }
+  }, [])
+
   return (
     <AuthContext.Provider
-      value={{ status, email, signIn, signUp, confirmSignUp, resendCode, signOut, getIdToken }}
+      value={{
+        status,
+        email,
+        signIn,
+        signUp,
+        confirmSignUp,
+        resendCode,
+        signOut,
+        getIdToken,
+        getOptionalIdToken,
+      }}
     >
       {children}
     </AuthContext.Provider>

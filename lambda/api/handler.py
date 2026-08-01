@@ -66,7 +66,9 @@ def post_songs(event, claims):
     body = json.loads(event.get("body") or "{}")
     song_id = uuid.uuid4().hex[:12]
     created = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    user = claims.get("sub", "unknown")
+    # Public route (Phase 7): uploads need no account. Signed-in users still
+    # arrive with claims via the frontend's optional auth header.
+    user = claims.get("sub", "anonymous")
     raw_key = f"songs/{song_id}/raw/input.mp3"
     _ddb().put_item(TableName=TABLE, Item={
         "PK": {"S": f"SONG#{song_id}"}, "SK": {"S": "METADATA"},
@@ -143,8 +145,43 @@ def get_audio_urls(event, claims):
     return _resp(200, {"urls": urls, "expiresInSeconds": URL_TTL_SECONDS})
 
 
+# Statuses that never belong in the public catalog: not-yet-uploaded shells,
+# rejected files, and LINKED duplicates (the canonical original is already
+# listed - fingerprint dedup is what keeps the shared library duplicate-free).
+CATALOG_HIDDEN_STATUSES = {"AWAITING_UPLOAD", "REJECTED", "LINKED"}
+
+
+def get_songs(event, claims):
+    """Public site-wide song catalog, newest first (Phase 7 shared library).
+
+    A paginated Scan is deliberate at the current catalog size; revisit with a
+    static-PK GSI ("all songs by createdAt") if the table outgrows it.
+    """
+    items = []
+    kwargs = {"TableName": TABLE,
+              "FilterExpression": "SK = :m",
+              "ExpressionAttributeValues": {":m": {"S": "METADATA"}}}
+    while True:
+        page = _ddb().scan(**kwargs)
+        items.extend(page.get("Items", []))
+        if "LastEvaluatedKey" not in page:
+            break
+        kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]
+    songs = [{
+        "songId": it["PK"]["S"].removeprefix("SONG#"),
+        "title": it.get("title", {}).get("S", ""),
+        "artist": it.get("artist", {}).get("S", ""),
+        "status": it.get("status", {}).get("S", ""),
+        "createdAt": it.get("createdAt", {}).get("S", ""),
+        "sourceLanguage": it["sourceLanguage"]["S"] if "sourceLanguage" in it else None,
+    } for it in items if it.get("status", {}).get("S") not in CATALOG_HIDDEN_STATUSES]
+    songs.sort(key=lambda s: s["createdAt"], reverse=True)
+    return _resp(200, {"songs": songs})
+
+
 ROUTES = {
     "POST /songs": post_songs,
+    "GET /songs": get_songs,
     "GET /jobs/{id}": get_job,
     "GET /songs/{id}/lyrics": get_lyrics,
     "GET /songs/{id}/audio-urls": get_audio_urls,

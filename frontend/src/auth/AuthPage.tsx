@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Disc3 } from 'lucide-react'
 import { useAuth } from './AuthContext'
 import { authErrorMessage } from './authErrors'
 
@@ -71,25 +72,38 @@ export default function AuthPage() {
     setInfo(null)
   }
 
+  const inputCls =
+    'w-full rounded-[3px] border border-border bg-surface px-4 py-3 text-sm text-foreground outline-none focus:border-brass'
+  const labelCls = 'label-mono flex flex-col gap-1.5 text-muted-foreground'
+  const submitCls =
+    'font-button w-full rounded-[3px] bg-ink px-4 py-3 text-ink-foreground transition-colors hover:bg-brass hover:text-ink disabled:opacity-50'
+  const linkCls = 'label-mono text-brass hover:underline'
+
   return (
-    <div className="auth-page">
-      <h1 className="wordmark">Cadenza</h1>
+    <div className="flex min-h-[80vh] flex-col items-center px-5 pt-20 text-foreground">
+      <span className="flex h-10 w-10 items-center justify-center rounded-[3px] bg-ink text-brass">
+        <Disc3 className="h-4 w-4" aria-hidden />
+      </span>
+      <h1 className="font-content mt-6 text-3xl tracking-tight">cadenza</h1>
+      <p className="label-mono mt-2 text-muted-foreground">[ SONGS AS TEXTBOOKS ]</p>
+      <div className="mt-8 w-full max-w-xs">
       {error && (
-        <p role="alert" className="auth-error">
+        <p role="alert" className="mb-3 rounded-[3px] border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
         </p>
       )}
-      {info && <p className="auth-info">{info}</p>}
+      {info && <p className="mb-3 rounded-[3px] border border-sage/40 bg-sage/10 px-3 py-2 text-sm text-sage">{info}</p>}
 
       {mode === 'signIn' && (
-        <form onSubmit={handleSignIn} aria-label="Sign in">
-          <label>
+        <form onSubmit={handleSignIn} aria-label="Sign in" className="space-y-3">
+          <label className={labelCls}>
             Email
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+            <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
           </label>
-          <label>
+          <label className={labelCls}>
             Password
             <input
+              className={inputCls}
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -97,11 +111,11 @@ export default function AuthPage() {
               autoComplete="current-password"
             />
           </label>
-          <button type="submit" disabled={pending}>
+          <button type="submit" disabled={pending} className={submitCls}>
             Sign in
           </button>
-          <p>
-            <button type="button" className="link" onClick={() => switchMode('signUp')}>
+          <p className="pt-1 text-center">
+            <button type="button" className={linkCls} onClick={() => switchMode('signUp')}>
               Need an account? Sign up
             </button>
           </p>
@@ -109,14 +123,15 @@ export default function AuthPage() {
       )}
 
       {mode === 'signUp' && (
-        <form onSubmit={handleSignUp} aria-label="Sign up">
-          <label>
+        <form onSubmit={handleSignUp} aria-label="Sign up" className="space-y-3">
+          <label className={labelCls}>
             Email
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+            <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
           </label>
-          <label>
+          <label className={labelCls}>
             Password
             <input
+              className={inputCls}
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -124,12 +139,12 @@ export default function AuthPage() {
               autoComplete="new-password"
             />
           </label>
-          <p className="hint">At least 12 characters, with an uppercase letter, a lowercase letter, and a number.</p>
-          <button type="submit" disabled={pending}>
+          <p className="text-xs text-muted-foreground">At least 12 characters, with an uppercase letter, a lowercase letter, and a number.</p>
+          <button type="submit" disabled={pending} className={submitCls}>
             Create account
           </button>
-          <p>
-            <button type="button" className="link" onClick={() => switchMode('signIn')}>
+          <p className="pt-1 text-center">
+            <button type="button" className={linkCls} onClick={() => switchMode('signIn')}>
               Already have an account? Sign in
             </button>
           </p>
@@ -137,13 +152,14 @@ export default function AuthPage() {
       )}
 
       {mode === 'confirm' && (
-        <form onSubmit={handleConfirm} aria-label="Confirm account">
-          <p>
-            We emailed a confirmation code to <strong>{email}</strong>.
+        <form onSubmit={handleConfirm} aria-label="Confirm account" className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            We emailed a confirmation code to <strong className="text-foreground">{email}</strong>.
           </p>
-          <label>
+          <label className={labelCls}>
             Confirmation code
             <input
+              className={inputCls}
               inputMode="numeric"
               value={code}
               onChange={(e) => setCode(e.target.value)}
@@ -151,16 +167,17 @@ export default function AuthPage() {
               autoComplete="one-time-code"
             />
           </label>
-          <button type="submit" disabled={pending}>
+          <button type="submit" disabled={pending} className={submitCls}>
             Confirm
           </button>
-          <p>
-            <button type="button" className="link" onClick={() => void run(() => auth.resendCode(email))}>
+          <p className="pt-1 text-center">
+            <button type="button" className={linkCls} onClick={() => void run(() => auth.resendCode(email))}>
               Resend code
             </button>
           </p>
         </form>
       )}
+      </div>
     </div>
   )
 }

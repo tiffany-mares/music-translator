@@ -12,7 +12,7 @@ export function useAudioUrls(
   songId: string | null,
   pipelineDone: boolean,
 ): UseQueryResult<AudioUrls, Error> {
-  const { getIdToken } = useAuth()
+  const { getOptionalIdToken } = useAuth()
   return useQuery({
     // pipelineDone in the key forces exactly one refetch when the job hits
     // COMPLETE - by then WriteAudioKeys has published vocals/noVocals. On the
@@ -20,7 +20,7 @@ export function useAudioUrls(
     // linked songs already carry whatever stems they will ever have.
     queryKey: ['audioUrls', songId, pipelineDone],
     enabled: songId !== null,
-    queryFn: async () => getAudioUrls(await getIdToken(), songId!),
+    queryFn: async () => getAudioUrls(await getOptionalIdToken(), songId!),
     // Bridge the key change so the player never loses data mid-refetch.
     placeholderData: keepPreviousData,
     staleTime: STALE_MS,

@@ -9,6 +9,7 @@ import {
   type QuizResponse,
   type ReviewRequest,
   type ReviewResult,
+  type SongListing,
 } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE_URL
@@ -21,18 +22,32 @@ async function parseJson(res: Response): Promise<unknown> {
   }
 }
 
+// The listen/upload path is public (Phase 7): those routes take
+// `token: string | null` and send Authorization only when signed in.
+// The /vocab/* routes keep the required `token: string`.
+function authHeaders(token: string | null): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 export async function createSong(
-  token: string,
+  token: string | null,
   meta?: { title?: string; artist?: string },
 ): Promise<CreateSongResponse> {
   const res = await fetch(`${BASE}/songs`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
     body: JSON.stringify(meta ?? {}),
   })
   const body = await parseJson(res)
   if (!res.ok) throw new ApiError(res.status, body)
   return body as CreateSongResponse
+}
+
+export async function getSongs(token: string | null): Promise<SongListing[]> {
+  const res = await fetch(`${BASE}/songs`, { headers: authHeaders(token) })
+  const body = await parseJson(res)
+  if (!res.ok) throw new ApiError(res.status, body)
+  return (body as { songs: SongListing[] }).songs
 }
 
 // Presigned PUT: authentication is baked into the URL; adding headers that
@@ -60,36 +75,36 @@ export function toProcessOutcome(status: number, body: Record<string, unknown>):
   throw new ApiError(status, body)
 }
 
-export async function processSong(token: string, songId: string): Promise<ProcessOutcome> {
+export async function processSong(token: string | null, songId: string): Promise<ProcessOutcome> {
   const res = await fetch(`${BASE}/songs/${songId}/process`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(token),
   })
   const body = await parseJson(res)
   return toProcessOutcome(res.status, (body ?? {}) as Record<string, unknown>)
 }
 
-export async function getAudioUrls(token: string, songId: string): Promise<AudioUrls> {
+export async function getAudioUrls(token: string | null, songId: string): Promise<AudioUrls> {
   const res = await fetch(`${BASE}/songs/${songId}/audio-urls`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(token),
   })
   const body = await parseJson(res)
   if (!res.ok) throw new ApiError(res.status, body)
   return body as AudioUrls
 }
 
-export async function getLyrics(token: string, songId: string): Promise<LyricsDoc> {
+export async function getLyrics(token: string | null, songId: string): Promise<LyricsDoc> {
   const res = await fetch(`${BASE}/songs/${songId}/lyrics`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(token),
   })
   const body = await parseJson(res)
   if (!res.ok) throw new ApiError(res.status, body)
   return body as LyricsDoc
 }
 
-export async function getJob(token: string, jobId: string): Promise<Job> {
+export async function getJob(token: string | null, jobId: string): Promise<Job> {
   const res = await fetch(`${BASE}/jobs/${jobId}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(token),
   })
   const body = await parseJson(res)
   if (!res.ok) throw new ApiError(res.status, body)

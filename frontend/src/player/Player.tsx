@@ -3,6 +3,7 @@ import WordSyncedLyrics, { type PipelineState } from '../lyrics/WordSyncedLyrics
 import SingAlongPanel from '../singalong/SingAlongPanel'
 import { useJobPolling } from '../upload/useJobPolling'
 import { useAudioUrls } from './useAudioUrls'
+import Vinyl from './Vinyl'
 
 type StemKey = 'raw' | 'vocals' | 'noVocals'
 const STEM_ORDER: StemKey[] = ['raw', 'vocals', 'noVocals']
@@ -42,6 +43,7 @@ export default function Player({
   const [src, setSrc] = useState<string>()
   const [mediaError, setMediaError] = useState(false)
   const [singAlong, setSingAlong] = useState(false)
+  const [playing, setPlaying] = useState(false)
 
   const urls = data?.urls ?? {}
   const available = STEM_ORDER.filter((k) => urls[k])
@@ -85,24 +87,30 @@ export default function Player({
   if (!src) {
     if (urlsError)
       return (
-        <div className="player">
-          <p role="alert" className="auth-error">
+        <div className="player flex flex-col gap-3">
+          <p role="alert" className="rounded-[3px] border border-destructive/40 bg-destructive/10 px-4 py-3 text-destructive">
             Couldn&apos;t load audio.
           </p>
-          <button onClick={() => void refetchUrls()}>Retry</button>
+          <button className="font-button self-start rounded-full border border-brass/50 px-5 py-2 text-brass hover:bg-brass/10" onClick={() => void refetchUrls()}>Retry</button>
         </div>
       )
-    return <p className="status-line">Preparing audio…</p>
+    return <p className="status-line label-mono text-muted-foreground">Preparing audio…</p>
   }
 
   return (
-    <div className="player">
-      <audio
-        ref={audioRef}
-        controls
-        src={src}
-        data-testid="player-audio"
-        onError={() => setMediaError(true)}
+    <div className="player corner-ticks plate flex flex-col gap-5 rounded-[10px] p-6">
+      <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+        <Vinyl size={120} spinning={playing} className="shrink-0" />
+        <audio
+          ref={audioRef}
+          controls
+          src={src}
+          data-testid="player-audio"
+          className="w-full"
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onEnded={() => setPlaying(false)}
+          onError={() => setMediaError(true)}
         onLoadedMetadata={() => {
           const resume = resumeRef.current
           if (!resume || !audioRef.current) return
@@ -112,19 +120,27 @@ export default function Player({
           // the user just presses play again.
           if (resume.play) void audioRef.current.play().catch(() => {})
         }}
-      />
+        />
+      </div>
       {mediaError && (
         <>
-          <p role="alert" className="auth-error">
+          <p role="alert" className="rounded-[3px] border border-destructive/40 bg-destructive/10 px-4 py-3 text-destructive">
             Audio failed to load — the link may have expired.
           </p>
-          <button onClick={() => void reloadTrack()}>Reload track</button>
+          <button className="font-button self-start rounded-full border border-brass/50 px-5 py-2 text-brass hover:bg-brass/10" onClick={() => void reloadTrack()}>Reload track</button>
         </>
       )}
       {available.length > 1 && (
-        <div className="player-stems" role="group" aria-label="Audio track">
+        <div className="player-stems flex flex-wrap gap-2" role="group" aria-label="Audio track">
           {available.map((k) => (
-            <button key={k} aria-pressed={k === stem} onClick={() => selectStem(k)}>
+            <button
+              key={k}
+              aria-pressed={k === stem}
+              onClick={() => selectStem(k)}
+              className={`label-mono rounded-full border px-4 py-1.5 ${
+                k === stem ? 'border-brass bg-brass text-ink' : 'border-border text-muted-foreground hover:border-brass hover:text-brass'
+              }`}
+            >
               {STEM_LABELS[k]}
             </button>
           ))}
@@ -134,7 +150,9 @@ export default function Player({
           every mounted player. The toggle is the mode's single open/close control;
           unmounting the panel tears down mic + worker (useSingAlong cleanup). */}
       <button
-        className="singalong-toggle"
+        className={`singalong-toggle label-mono self-start rounded-full border px-4 py-1.5 ${
+          singAlong ? 'border-brass bg-brass text-ink' : 'border-border text-muted-foreground hover:border-brass hover:text-brass'
+        }`}
         aria-pressed={singAlong}
         onClick={() => setSingAlong((v) => !v)}
       >

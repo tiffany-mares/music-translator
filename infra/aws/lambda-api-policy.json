@@ -8,6 +8,12 @@
       "Resource": "arn:aws:dynamodb:__REGION__:__ACCOUNT_ID__:table/LyraLearnTable"
     },
     {
+      "Sid": "ListSongsScan",
+      "Effect": "Allow",
+      "Action": "dynamodb:Scan",
+      "Resource": "arn:aws:dynamodb:__REGION__:__ACCOUNT_ID__:table/LyraLearnTable"
+    },
+    {
       "Sid": "SongObjectsReadAndUploadTarget",
       "Effect": "Allow",
       "Action": ["s3:GetObject", "s3:PutObject"],

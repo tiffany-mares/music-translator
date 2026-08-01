@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as amplifyAuth from 'aws-amplify/auth'
@@ -26,18 +26,35 @@ function renderSignedOut() {
   return renderWithProviders(<App />)
 }
 
+// Phase 7: the shell renders for everyone; the auth form lives behind the
+// Sign in nav item, and "Sign in" now names BOTH that nav item and the form's
+// submit - form interactions are scoped with within() to disambiguate.
+async function openAuthView() {
+  await userEvent.click(await screen.findByRole('button', { name: 'Sign in' }))
+}
+
+function signInForm() {
+  return within(screen.getByRole('form', { name: /sign in/i }))
+}
+
 async function fillSignIn(email: string, password: string) {
-  await userEvent.type(await screen.findByLabelText(/email/i), email)
-  await userEvent.type(screen.getByLabelText(/password/i), password)
-  await userEvent.click(screen.getByRole('button', { name: /sign in/i }))
+  await openAuthView()
+  await userEvent.type(signInForm().getByLabelText(/email/i), email)
+  await userEvent.type(signInForm().getByLabelText(/password/i), password)
+  await userEvent.click(signInForm().getByRole('button', { name: /sign in/i }))
 }
 
 async function fillSignUp(email: string, password: string) {
+  await openAuthView()
   await userEvent.click(await screen.findByRole('button', { name: /sign up/i }))
   await userEvent.type(screen.getByLabelText(/email/i), email)
   await userEvent.type(screen.getByLabelText(/password/i), password)
   await userEvent.click(screen.getByRole('button', { name: /create account/i }))
 }
+
+// The full marketing pages now mount with the shell; userEvent interactions
+// over that much DOM push some tests past the default 5s timeout in jsdom.
+vi.setConfig({ testTimeout: 15000 })
 
 describe('AuthPage', () => {
   beforeEach(() => vi.resetAllMocks())
@@ -115,7 +132,7 @@ describe('AuthPage', () => {
     let release!: (v: SignInOutput) => void
     mocked.signIn.mockImplementation(() => new Promise((res) => (release = res)))
     await fillSignIn('new@user.dev', 'Password12345')
-    expect(screen.getByRole('button', { name: /sign in/i })).toBeDisabled()
+    expect(signInForm().getByRole('button', { name: /sign in/i })).toBeDisabled()
     release(DONE)
   })
 })
