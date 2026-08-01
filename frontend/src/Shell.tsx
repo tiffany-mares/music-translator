@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import AuthPage from './auth/AuthPage'
 import { useAuth } from './auth/AuthContext'
 import LibraryView from './library/LibraryView'
@@ -6,6 +6,7 @@ import HowItWorks from './marketing/HowItWorks'
 import Landing from './marketing/Landing'
 import Stack from './marketing/Stack'
 import NavShell, { type View } from './nav/NavShell'
+import { parsePath, viewToPath } from './nav/urlView'
 import UploadPanel from './upload/UploadPanel'
 import ReviewPanel from './vocab/ReviewPanel'
 import { useDueVocab } from './vocab/useDueVocab'
@@ -19,14 +20,30 @@ import { JobSocketProvider } from './ws/JobSocketContext'
 export default function Shell() {
   const { status, email, signOut } = useAuth()
   const signedIn = status === 'signedIn'
-  const [view, setView] = useState<View>('home')
+  // Deep links without a router: view state initializes from and mirrors to
+  // the URL (urlView.ts); back/forward drive popstate -> state.
+  const [route, setRoute] = useState(() => parsePath(window.location.pathname))
+  const view = route.view
+
+  const setView = useCallback((v: View, songId: string | null = null) => {
+    setRoute({ view: v, songId })
+    const path = viewToPath(v, songId)
+    if (window.location.pathname !== path) window.history.pushState(null, '', path)
+  }, [])
+
+  useEffect(() => {
+    const onPop = () => setRoute(parsePath(window.location.pathname))
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
   const { data: due } = useDueVocab()
   const dueCount = due?.count ?? 0
 
   // Sign-in is a view, not a gate: once the session lands, leave the form.
   useEffect(() => {
     if (signedIn && view === 'signin') setView('library')
-  }, [signedIn, view])
+  }, [signedIn, view, setView])
 
   // JobSocketProvider is a no-op when signed out (it mounts the socket only
   // for signed-in sessions); anonymous visitors get job status via polling.
@@ -47,7 +64,11 @@ export default function Shell() {
           <HowItWorks onNavigate={setView} />
         </div>
         <div hidden={view !== 'library'}>
-          <LibraryView onNavigate={setView} />
+          <LibraryView
+            onNavigate={setView}
+            selectedSongId={route.songId}
+            onSelectSong={(songId) => setView('library', songId)}
+          />
         </div>
         <div hidden={view !== 'upload'}>
           <UploadPanel />

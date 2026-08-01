@@ -11,5 +11,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
     globals: true,
+    // The always-mounted marketing DOM makes jsdom role scans slow under
+    // parallel suite load; 5s default flakes on slower runs.
+    testTimeout: 20000,
   },
 })

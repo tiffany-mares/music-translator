@@ -57,7 +57,12 @@ async function fillSignUp(email: string, password: string) {
 vi.setConfig({ testTimeout: 15000 })
 
 describe('AuthPage', () => {
-  beforeEach(() => vi.resetAllMocks())
+  beforeEach(() => {
+    vi.resetAllMocks()
+    // Deep-link sync (urlView): pushState from earlier tests persists on the
+    // shared jsdom location - start every test at the home path.
+    window.history.replaceState(null, '', '/')
+  })
 
   it('signs in and shows the shell', async () => {
     renderSignedOut()

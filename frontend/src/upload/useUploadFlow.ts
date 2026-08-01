@@ -1,5 +1,16 @@
 import { useCallback, useRef, useState } from 'react'
 import { createSong, processSong, uploadFile } from '../api/client'
+import { ApiError } from '../api/types'
+
+// ApiError.message is a generic "API error NNN"; when the server sent a
+// human-facing error (e.g. the 429 anonymous-upload quota), surface it.
+function friendlyError(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    const serverMessage = (err.body as { error?: string } | null)?.error
+    if (serverMessage) return serverMessage
+  }
+  return err instanceof Error ? err.message : fallback
+}
 import type { ProcessOutcome } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 
@@ -67,7 +78,7 @@ export function useUploadFlow() {
         // Fresh token: the PUT of a large file can outlive short token windows.
         applyOutcome(await processSong(await getOptionalIdToken(), created.songId))
       } catch (err) {
-        setState({ step: 'error', message: err instanceof Error ? err.message : 'Upload failed' })
+        setState({ step: 'error', message: friendlyError(err, 'Upload failed') })
       }
     },
     [getOptionalIdToken],

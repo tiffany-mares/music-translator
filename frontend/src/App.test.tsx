@@ -25,6 +25,9 @@ function renderApp() {
 describe('App auth states', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    // Deep-link sync (urlView): pushState from earlier tests persists on the
+    // shared jsdom location - start every test at the home path.
+    window.history.replaceState(null, '', '/')
     // Shell mounts useDueVocab; an auto-mock resolving undefined would log
     // React Query "data cannot be undefined" noise in every signed-in test.
     mockedApi.getDueVocab.mockResolvedValue({ items: [], count: 0 })

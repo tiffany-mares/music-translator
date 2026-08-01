@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { ArrowLeft, ListFilter, Play, Plus } from 'lucide-react'
 import coverUrl from '../assets/music-cover.png'
-import type { SongListing } from '../api/types'
 import type { View } from '../nav/NavShell'
 import Player from '../player/Player'
 import Vinyl from '../player/Vinyl'
@@ -12,10 +11,32 @@ import { useSongs } from './useSongs'
 // newest first. Clicking a card mounts the embedded Player (jobId=null - the
 // same invocation as the linked-upload path; LINKED duplicates never appear
 // here, so no lyrics indirection is needed).
-export default function LibraryView({ onNavigate }: { onNavigate: (view: View) => void }) {
+export default function LibraryView({
+  onNavigate,
+  selectedSongId = null,
+  onSelectSong,
+}: {
+  onNavigate: (view: View) => void
+  // Controlled selection (Phase 7 follow-up): the Shell owns the selected
+  // song so /song/{id} deep links work; falls back to local state when
+  // rendered without the props (tests, embedding).
+  selectedSongId?: string | null
+  onSelectSong?: (songId: string | null) => void
+}) {
   const { data: songs, isError, refetch } = useSongs()
   const [language, setLanguage] = useState<string | null>(null)
-  const [selected, setSelected] = useState<SongListing | null>(null)
+  const [localSelected, setLocalSelected] = useState<string | null>(null)
+  const selectedId = onSelectSong ? selectedSongId : localSelected
+  const setSelected = onSelectSong ?? setLocalSelected
+  const selected = selectedId ? (songs?.find((s) => s.songId === selectedId) ?? null) : null
+
+  if (selectedId && !songs && !isError) {
+    return (
+      <section className="mx-auto max-w-4xl px-6 py-10">
+        <p className="status-line label-mono text-muted-foreground">Loading song…</p>
+      </section>
+    )
+  }
 
   if (selected) {
     return (
@@ -109,7 +130,7 @@ export default function LibraryView({ onNavigate }: { onNavigate: (view: View) =
                 <button
                   key={song.songId}
                   type="button"
-                  onClick={() => setSelected(song)}
+                  onClick={() => setSelected(song.songId)}
                   className="reveal group block text-left"
                   style={{ animationDelay: `${Math.min(i, 8) * 70}ms` }}
                 >
