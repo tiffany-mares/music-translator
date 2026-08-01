@@ -27,14 +27,21 @@ def backfill(coll, ddb, table: str) -> tuple[int, int]:
         if doc.get("targetLanguage"):
             expr += ", targetLanguage = :tl"
             values[":tl"] = {"S": doc["targetLanguage"]}
-        ddb.update_item(
-            TableName=table,
-            Key={"PK": {"S": f"SONG#{song_id}"}, "SK": {"S": "METADATA"}},
-            # Only touch items that actually exist - never create shells.
-            ConditionExpression="attribute_exists(PK)",
-            UpdateExpression=expr,
-            ExpressionAttributeValues=values,
-        )
+        try:
+            ddb.update_item(
+                TableName=table,
+                Key={"PK": {"S": f"SONG#{song_id}"}, "SK": {"S": "METADATA"}},
+                # Only touch items that actually exist - never create shells.
+                ConditionExpression="attribute_exists(PK)",
+                UpdateExpression=expr,
+                ExpressionAttributeValues=values,
+            )
+        except ddb.exceptions.ConditionalCheckFailedException:
+            # Pre-API songs (e.g. the Phase 1 local test song) have Mongo docs
+            # but no METADATA item - nothing to list, nothing to backfill.
+            print(f"SKIP {song_id}: no METADATA item in DynamoDB")
+            skipped += 1
+            continue
         print(f"backfilled {song_id}: {source}")
         done += 1
     return done, skipped

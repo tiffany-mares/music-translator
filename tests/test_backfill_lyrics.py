@@ -74,10 +74,17 @@ class _FakeColl:
 
 
 class _FakeDdbClient:
-    def __init__(self):
+    class exceptions:
+        class ConditionalCheckFailedException(Exception):
+            pass
+
+    def __init__(self, missing=()):
+        self.missing = set(missing)
         self.update_calls = []
 
     def update_item(self, **kwargs):
+        if kwargs["Key"]["PK"]["S"].removeprefix("SONG#") in self.missing:
+            raise self.exceptions.ConditionalCheckFailedException()
         self.update_calls.append(kwargs)
         return {}
 
@@ -97,3 +104,14 @@ def test_backfill_source_language_updates_metadata_and_skips_docs_without_langua
     assert first["ExpressionAttributeValues"][":sl"] == {"S": "ro"}
     assert first["ExpressionAttributeValues"][":tl"] == {"S": "en"}
     assert ":tl" not in ddb.update_calls[1]["ExpressionAttributeValues"]
+
+
+def test_backfill_skips_mongo_docs_with_no_metadata_item():
+    coll = _FakeColl([
+        {"songId": "test-song-001", "sourceLanguage": "ro"},  # pre-API: no METADATA
+        {"songId": "s9", "sourceLanguage": "ro"},
+    ])
+    ddb = _FakeDdbClient(missing={"test-song-001"})
+    done, skipped = bf_lang.backfill(coll, ddb, "TestTable")
+    assert (done, skipped) == (1, 1)
+    assert ddb.update_calls[0]["Key"]["PK"]["S"] == "SONG#s9"
