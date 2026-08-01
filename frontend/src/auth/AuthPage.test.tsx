@@ -40,7 +40,7 @@ function signInForm() {
 async function fillSignIn(email: string, password: string) {
   await openAuthView()
   await userEvent.type(signInForm().getByLabelText(/email/i), email)
-  await userEvent.type(signInForm().getByLabelText(/password/i), password)
+  await userEvent.type(signInForm().getByLabelText(/password/i, { selector: 'input' }), password)
   await userEvent.click(signInForm().getByRole('button', { name: /sign in/i }))
 }
 
@@ -48,7 +48,7 @@ async function fillSignUp(email: string, password: string) {
   await openAuthView()
   await userEvent.click(await screen.findByRole('button', { name: /sign up/i }))
   await userEvent.type(screen.getByLabelText(/email/i), email)
-  await userEvent.type(screen.getByLabelText(/password/i), password)
+  await userEvent.type(screen.getByLabelText(/password/i, { selector: 'input' }), password)
   await userEvent.click(screen.getByRole('button', { name: /create account/i }))
 }
 
