@@ -540,3 +540,88 @@ body {
     padding-left: 15rem;
   }
 }
+
+/* ── Lyrics (Cadenza re-skin of the contract classes) ─────────────────────
+   These class NAMES are part of the test contract (word-active, word-saved,
+   line-active, lyrics-translation) - they are styled here rather than with
+   inline Tailwind so the DOM stays byte-identical to the pre-reskin panel. */
+.lyrics-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 24rem;
+  overflow-y: auto;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: color-mix(in oklab, var(--surface) 60%, transparent);
+}
+
+.lyrics-line {
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  transition: background-color 0.3s cubic-bezier(0.5, 0, 0, 1);
+}
+
+.lyrics-line.line-active {
+  background-color: color-mix(in oklab, var(--brass) 10%, transparent);
+}
+
+.lyrics-original {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-optical-sizing: auto;
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: var(--foreground);
+}
+
+.lyrics-original .word {
+  margin-right: 0.3em;
+  border-radius: 3px;
+  padding: 0 0.08em;
+  border-bottom: 1px solid transparent;
+}
+
+.lyrics-original button.word {
+  background: none;
+  border: none;
+  border-bottom: 1px solid transparent;
+  font: inherit;
+  color: inherit;
+  padding: 0 0.08em;
+  cursor: pointer;
+}
+
+.lyrics-original button.word:hover:not(.word-active),
+.lyrics-original button.word:focus-visible:not(.word-active) {
+  color: var(--brass);
+  border-bottom-color: color-mix(in oklab, var(--brass) 60%, transparent);
+}
+
+.lyrics-original .word-active {
+  color: var(--brass);
+  border-bottom-color: var(--brass);
+  text-shadow: 0 0 18px color-mix(in oklab, var(--brass) 45%, transparent);
+}
+
+.lyrics-original .word-saved {
+  color: var(--sage);
+}
+
+.lyrics-translation {
+  margin: 0.15rem 0 0;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 0.9rem;
+  color: var(--sage);
+}
+
+/* legacy status-line hooks still used by re-skinned panels */
+.status-line {
+  margin: 0;
+}
+
+.status-complete {
+  color: var(--sage);
+}
