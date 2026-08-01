@@ -89,3 +89,24 @@ Supporting data from validation:
 **Environment note:** TensorFlow's oneDNN kernels hard-crashed silently on full-length audio until disabled in the stage (`TF_ENABLE_ONEDNN_OPTS=0` via `setdefault`, the same baked-in-workaround pattern used in Phase 1.2).
 
 **Verdict:** contour tracks the sung melody — proceed to Phase 1.5.
+
+## 1.5 — Full local pipeline (backfilled record, 2026-08-01)
+
+**Note added retroactively during the 2026-08-01 project audit:** this section was the one phase whose measured evidence lived only in CLAUDE.md — the run itself happened and was gated at phase time; the numbers below are moved here so the phase-note audit trail is complete.
+
+**Done-when:** one command produces `song_lyrics.json` (§6.2 shape), `melody.mid`, `pitch.json`, and `timings.json`, with real per-stage timing numbers.
+
+**Command:** `python pipeline.py [song] [songId] [output-dir]` (defaults `test_data/input_song.mp3`, `test-song-001`, `output/`) — Demucs → (faster-whisper ∥ Basic Pitch, concurrent) → MarianMT. Output validated by `python scripts/validate_song_lyrics.py`.
+
+**Measured per-stage timings (215s test song, local CPU):**
+
+| Stage | Wall clock |
+|---|---|
+| Demucs separation | 591s |
+| Whisper + Basic Pitch (concurrent) | 1001s |
+| MarianMT translation | 30s |
+| **Total** | **1622s (~27 min)** |
+
+These are the numbers Phase 2 was built to beat (2.1 recorded 72.4s GPU in-container ML total vs this 1622s local CPU baseline).
+
+**Verdict:** Phase 1.5 done — Phase 1 complete.

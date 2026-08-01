@@ -235,6 +235,21 @@ async fn handler(event: Request) -> Result<Response<Body>, Error> {
     let key = object.key().unwrap_or_default().to_string();
     let size = object.size().unwrap_or(0);
 
+    // Lifecycle targeting: keys are songs/{songId}/raw/... so no S3 prefix
+    // rule can select raw/ across songs - the tier=raw tag is what the
+    // 30-day -> STANDARD_IA transition filters on (terraform storage module).
+    // Best-effort: a tagging failure must never block validation.
+    let tagged = async {
+        let tag = aws_sdk_s3::types::Tag::builder().key("tier").value("raw").build()?;
+        let tagging = aws_sdk_s3::types::Tagging::builder().tag_set(tag).build()?;
+        s3.put_object_tagging().bucket(&bucket).key(&key).tagging(tagging).send().await?;
+        Ok::<(), Error>(())
+    }
+    .await;
+    if let Err(e) = tagged {
+        eprintln!("tier=raw tagging failed for {key} (IA transition will not apply): {e}");
+    }
+
     if let Err(reason) = validation::validate_size(size) {
         return reject(&ddb, &table, &song_id, &reason).await;
     }
