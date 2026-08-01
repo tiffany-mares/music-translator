@@ -7,3 +7,6 @@ import '@testing-library/jest-dom/vitest'
 // that into "permanently unhealthy" (the tested polling fallback). WS tests
 // opt back in with vi.stubGlobal('WebSocket', FakeWebSocket).
 delete (globalThis as { WebSocket?: unknown }).WebSocket
+
+// Worker needs no such deletion: jsdom ships no Worker global, so the suite is
+// worker-less by default. Worker tests opt in via vi.stubGlobal('Worker', FakeWorker).
