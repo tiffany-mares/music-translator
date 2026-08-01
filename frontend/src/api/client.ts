@@ -2,9 +2,13 @@ import {
   ApiError,
   type AudioUrls,
   type CreateSongResponse,
+  type DueVocabResponse,
   type Job,
   type LyricsDoc,
   type ProcessOutcome,
+  type QuizResponse,
+  type ReviewRequest,
+  type ReviewResult,
 } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE_URL
@@ -90,4 +94,33 @@ export async function getJob(token: string, jobId: string): Promise<Job> {
   const body = await parseJson(res)
   if (!res.ok) throw new ApiError(res.status, body)
   return body as Job
+}
+
+export async function reviewVocab(token: string, req: ReviewRequest): Promise<ReviewResult> {
+  const res = await fetch(`${BASE}/vocab/review`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  const body = await parseJson(res)
+  if (!res.ok) throw new ApiError(res.status, body)
+  return body as ReviewResult
+}
+
+export async function getDueVocab(token: string): Promise<DueVocabResponse> {
+  const res = await fetch(`${BASE}/vocab/due`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const body = await parseJson(res)
+  if (!res.ok) throw new ApiError(res.status, body)
+  return body as DueVocabResponse
+}
+
+export async function getQuiz(token: string): Promise<QuizResponse> {
+  const res = await fetch(`${BASE}/vocab/quiz`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const body = await parseJson(res)
+  if (!res.ok) throw new ApiError(res.status, body)
+  return body as QuizResponse
 }

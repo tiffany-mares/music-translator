@@ -1,5 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createSong, getAudioUrls, getJob, getLyrics, toProcessOutcome, uploadFile } from './client'
+import {
+  createSong,
+  getAudioUrls,
+  getDueVocab,
+  getJob,
+  getLyrics,
+  getQuiz,
+  reviewVocab,
+  toProcessOutcome,
+  uploadFile,
+} from './client'
 import { ApiError } from './types'
 
 const fetchMock = vi.fn()
@@ -153,5 +163,78 @@ describe('getJob', () => {
   it('throws ApiError on 404', async () => {
     fetchMock.mockResolvedValue(jsonResponse(404, { error: 'job not found' }))
     await expect(getJob('tok', 's1.zzzz')).rejects.toMatchObject({ status: 404 })
+  })
+})
+
+describe('reviewVocab', () => {
+  it('POSTs the full encounter body with bearer token and parses the schedule', async () => {
+    const result = {
+      vocabId: 'inimă', nextReviewAt: '2026-08-01T12:00:00Z',
+      intervalDays: 1, repetitions: 0, easeFactor: 2.5, created: true,
+    }
+    fetchMock.mockResolvedValue(jsonResponse(200, result))
+    const req = { vocabId: 'inimă', quality: 0, term: 'inimă', definition: 'my heart', songId: 's1' }
+    const res = await reviewVocab('tok', req)
+    expect(res).toEqual(result)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toContain('/vocab/review')
+    expect(init.method).toBe('POST')
+    expect(init.headers.Authorization).toBe('Bearer tok')
+    expect(JSON.parse(init.body)).toEqual(req)
+  })
+
+  it('throws ApiError on 400 bad quality', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(400, { error: 'quality must be 0-5' }))
+    await expect(reviewVocab('tok', { vocabId: 'x', quality: 7 })).rejects.toMatchObject({
+      status: 400, body: { error: 'quality must be 0-5' },
+    })
+  })
+
+  it('throws ApiError on 404 unknown item without term', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(404, { error: 'vocab item not found' }))
+    await expect(reviewVocab('tok', { vocabId: 'ghost', quality: 4 })).rejects.toMatchObject({ status: 404 })
+  })
+})
+
+describe('getDueVocab', () => {
+  it('GETs /vocab/due with the bearer token and parses items', async () => {
+    const due = {
+      items: [{ vocabId: 'dor', term: 'dor', definition: 'longing', songId: 's1', nextReviewAt: '2026-01-01T00:00:00Z' }],
+      count: 1,
+    }
+    fetchMock.mockResolvedValue(jsonResponse(200, due))
+    const res = await getDueVocab('tok')
+    expect(res).toEqual(due)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toContain('/vocab/due')
+    expect(init.headers.Authorization).toBe('Bearer tok')
+  })
+
+  it('throws ApiError on non-2xx', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(500, { error: 'boom' }))
+    await expect(getDueVocab('tok')).rejects.toBeInstanceOf(ApiError)
+  })
+})
+
+describe('getQuiz', () => {
+  it('GETs /vocab/quiz and parses questions incl. null context fields', async () => {
+    const quiz = {
+      questions: [{
+        vocabId: 'zzz', term: 'zzz', definition: 'nonsense', hasContext: false,
+        songId: null, lineNumber: null, prompt: null, translation: null,
+      }],
+      count: 1,
+    }
+    fetchMock.mockResolvedValue(jsonResponse(200, quiz))
+    const res = await getQuiz('tok')
+    expect(res).toEqual(quiz)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toContain('/vocab/quiz')
+    expect(init.headers.Authorization).toBe('Bearer tok')
+  })
+
+  it('throws ApiError on non-2xx', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(500, null))
+    await expect(getQuiz('tok')).rejects.toMatchObject({ status: 500 })
   })
 })

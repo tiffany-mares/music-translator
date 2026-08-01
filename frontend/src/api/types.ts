@@ -50,6 +50,56 @@ export interface LyricsDoc {
   lines: LyricsLine[]
 }
 
+// --- Vocab / spaced repetition (Phase 5.5) ---
+
+export interface ReviewRequest {
+  vocabId: string
+  quality: number // SM-2 quality 0-5
+  // Present on encounter (create-on-first-review); absent on quiz answers.
+  term?: string
+  definition?: string
+  songId?: string
+}
+
+export interface ReviewResult {
+  vocabId: string
+  nextReviewAt: string // ISO-8601
+  intervalDays: number
+  repetitions: number
+  easeFactor: number
+  created: boolean
+}
+
+export interface DueVocabItem {
+  vocabId: string
+  term: string
+  definition: string
+  songId: string | null
+  nextReviewAt: string
+}
+
+export interface DueVocabResponse {
+  items: DueVocabItem[] // most-overdue first
+  count: number
+}
+
+export interface QuizQuestion {
+  vocabId: string
+  term: string
+  definition: string
+  hasContext: boolean
+  // The four context fields are explicit nulls when hasContext is false.
+  songId: string | null
+  lineNumber: number | null
+  prompt: string | null // real lyric line with the term blanked as ____
+  translation: string | null
+}
+
+export interface QuizResponse {
+  questions: QuizQuestion[]
+  count: number
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly body: unknown
