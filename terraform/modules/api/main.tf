@@ -259,8 +259,14 @@ resource "aws_lambda_function" "learning" {
   filename         = "${path.module}/../../../lambda/learning/target/learning-lambda.jar"
   source_code_hash = filebase64sha256("${path.module}/../../../lambda/learning/target/learning-lambda.jar")
   role             = aws_iam_role.learning.arn
-  timeout          = 10
+  timeout          = 15  # 5.4: cold quiz = JVM start + secret fetch + Atlas SRV/TLS + query; 10s was sized for DynamoDB-only
   memory_size      = 512 # JVM cold-start headroom; revisit after 5.3 has real latency numbers
+
+  environment {
+    variables = {
+      MONGODB_SECRET_ARN = var.mongodb_secret_arn
+    }
+  }
 }
 
 resource "aws_apigatewayv2_integration" "learning_lambda" {
@@ -277,6 +283,7 @@ resource "aws_apigatewayv2_route" "vocab" {
   for_each = toset([
     "POST /vocab/review",
     "GET /vocab/due",
+    "GET /vocab/quiz",
   ])
   api_id             = aws_apigatewayv2_api.http.id
   route_key          = each.key

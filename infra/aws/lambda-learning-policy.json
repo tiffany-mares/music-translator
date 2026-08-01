@@ -14,6 +14,12 @@
       "Resource": "arn:aws:dynamodb:__REGION__:__ACCOUNT_ID__:table/LyraLearnTable/index/GSI2"
     },
     {
+      "Sid": "ReadMongoSecretOnly",
+      "Effect": "Allow",
+      "Action": "secretsmanager:GetSecretValue",
+      "Resource": "arn:aws:secretsmanager:__REGION__:__ACCOUNT_ID__:secret:lyralearn/mongodb-*"
+    },
+    {
       "Sid": "OwnLogsOnly",
       "Effect": "Allow",
       "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
