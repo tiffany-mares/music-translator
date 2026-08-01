@@ -1,4 +1,5 @@
 import { act, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as amplifyAuth from 'aws-amplify/auth'
 import * as api from '../api/client'
@@ -99,5 +100,59 @@ describe('WordSyncedLyrics', () => {
     act(() => frame?.(0))
     expect(screen.getByText('mondo')).toHaveClass('word-active')
     expect(screen.getByText('Salut')).not.toHaveClass('word-active')
+  })
+})
+
+describe('WordSyncedLyrics vocab encounter (5.5)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    mockedAuth.fetchAuthSession.mockResolvedValue(session)
+    vi.stubGlobal('requestAnimationFrame', () => 1)
+    vi.stubGlobal('cancelAnimationFrame', () => {})
+    mockedApi.getLyrics.mockResolvedValue(doc)
+    mockedApi.reviewVocab.mockResolvedValue({
+      vocabId: 'mondo', nextReviewAt: '2026-08-02T00:00:00Z',
+      intervalDays: 1, repetitions: 0, easeFactor: 2.5, created: true,
+    })
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  async function renderPanel() {
+    renderWithProviders(
+      <WordSyncedLyrics songId="s1" pipelineState="done" audioRef={{ current: null }} />,
+    )
+    await waitFor(() => expect(screen.getByTestId('lyrics-panel')).toBeInTheDocument())
+  }
+
+  it('clicking a word POSTs the quality-0 encounter built from the doc', async () => {
+    await renderPanel()
+    await userEvent.click(screen.getByText('mondo'))
+    await waitFor(() =>
+      expect(mockedApi.reviewVocab).toHaveBeenCalledWith('tok', {
+        vocabId: 'mondo',
+        quality: 0,
+        term: 'mondo',
+        definition: 'Hello world',
+        songId: 's1',
+      }),
+    )
+    await waitFor(() => expect(screen.getByText('mondo')).toHaveClass('word-saved'))
+  })
+
+  it('a second click on a saved word does not re-post', async () => {
+    await renderPanel()
+    await userEvent.click(screen.getByText('mondo'))
+    await waitFor(() => expect(screen.getByText('mondo')).toHaveClass('word-saved'))
+    await userEvent.click(screen.getByText('mondo'))
+    await new Promise((r) => setTimeout(r, 30))
+    expect(mockedApi.reviewVocab).toHaveBeenCalledTimes(1)
+  })
+
+  it('a failed save shows an alert and leaves the word unsaved for retry', async () => {
+    mockedApi.reviewVocab.mockRejectedValue(new Error('500'))
+    await renderPanel()
+    await userEvent.click(screen.getByText('mondo'))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn.t save/i)
+    expect(screen.getByText('mondo')).not.toHaveClass('word-saved')
   })
 })
