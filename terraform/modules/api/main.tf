@@ -425,3 +425,64 @@ resource "aws_lambda_permission" "ws_disconnect" {
 }
 
 output "ws_endpoint" { value = aws_apigatewayv2_stage.ws.invoke_url }
+
+# ---- Phase 6.2: DynamoDB Streams -> Go push Lambda -> PostToConnection ----
+# Job items carry no userId (schema §6.1), so the handler resolves the owner
+# via SONG#{songId}/METADATA.uploadedBy, then fans out to every GSI1
+# connection - both documented deviations from §5.6 (notes/phase6.md §6.2).
+# No aws_lambda_permission: Lambda POLLS the stream (event source mapping);
+# the function role below carries the stream-read grant instead.
+
+variable "lyralearn_table_stream_arn" { type = string }
+
+resource "aws_iam_role" "ws_push" {
+  name               = "lyralearn-lambda-ws-push"
+  assume_role_policy = file("${path.module}/../../../infra/aws/lambda-trust.json")
+}
+
+resource "aws_iam_role_policy" "ws_push" {
+  name = "lyralearn-ws-push-scoped"
+  role = aws_iam_role.ws_push.id
+  policy = replace(replace(replace(
+    file("${path.module}/../../../infra/aws/lambda-ws-push-policy.json"),
+  "__WS_API_ID__", aws_apigatewayv2_api.ws.id), "__REGION__", var.region), "__ACCOUNT_ID__", var.account_id)
+}
+
+resource "aws_lambda_function" "ws_push" {
+  function_name    = "lyralearn-ws-push"
+  runtime          = "provided.al2023"
+  handler          = "bootstrap"
+  filename         = "${path.module}/../../../lambda/ws/dist/push.zip"
+  source_code_hash = filebase64sha256("${path.module}/../../../lambda/ws/dist/push.zip")
+  role             = aws_iam_role.ws_push.arn
+  timeout          = 30  # worst-case batch fan-out; typical record is <100ms
+  memory_size      = 128 # Go: one GetItem + one Query + a few HTTP POSTs
+
+  environment {
+    variables = {
+      LYRALEARN_TABLE   = "LyraLearnTable"
+      CONNECTIONS_TABLE = "WebSocketConnections"
+      # PostToConnection management endpoint is https (not wss) at the stage path.
+      WS_MANAGEMENT_ENDPOINT = "https://${aws_apigatewayv2_api.ws.id}.execute-api.${var.region}.amazonaws.com/prod"
+    }
+  }
+}
+
+resource "aws_lambda_event_source_mapping" "ws_push" {
+  event_source_arn                   = var.lyralearn_table_stream_arn
+  function_name                      = aws_lambda_function.ws_push.arn
+  starting_position                  = "LATEST"
+  maximum_batching_window_in_seconds = 0 # push latency is the whole point
+
+  # Server-side filter: the Lambda only ever invokes for job-item MODIFYs.
+  # VOCAB#/METADATA/etc. writes on the same stream never reach it. The same
+  # predicate is enforced (and unit-tested) in-code as belt and braces.
+  filter_criteria {
+    filter {
+      pattern = jsonencode({
+        eventName = ["MODIFY"]
+        dynamodb  = { Keys = { SK = { S = [{ prefix = "JOB#" }] } } }
+      })
+    }
+  }
+}

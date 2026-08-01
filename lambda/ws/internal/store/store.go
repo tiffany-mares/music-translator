@@ -21,6 +21,7 @@ type ConnectionStore interface {
 type DynamoAPI interface {
 	PutItem(ctx context.Context, in *dynamodb.PutItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
 	DeleteItem(ctx context.Context, in *dynamodb.DeleteItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.DeleteItemOutput, error)
+	Query(ctx context.Context, in *dynamodb.QueryInput, opts ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error)
 }
 
 type DynamoStore struct {
@@ -51,4 +52,35 @@ func (s *DynamoStore) Delete(ctx context.Context, connectionID string) error {
 		},
 	})
 	return err
+}
+
+// ConnectionsByUser returns every live connectionId for a user via GSI1 —
+// 6.2's reverse lookup. Deliberate §5.6 deviation (notes §6.2): the reference
+// looks up a single connectionId, which breaks multi-tab; we fan out to all.
+func (s *DynamoStore) ConnectionsByUser(ctx context.Context, userID string) ([]string, error) {
+	var ids []string
+	var start map[string]types.AttributeValue
+	for {
+		out, err := s.client.Query(ctx, &dynamodb.QueryInput{
+			TableName:              aws.String(s.table),
+			IndexName:              aws.String("GSI1"),
+			KeyConditionExpression: aws.String("userId = :u"),
+			ExpressionAttributeValues: map[string]types.AttributeValue{
+				":u": &types.AttributeValueMemberS{Value: userID},
+			},
+			ExclusiveStartKey: start,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range out.Items {
+			if v, ok := item["connectionId"].(*types.AttributeValueMemberS); ok {
+				ids = append(ids, v.Value)
+			}
+		}
+		if out.LastEvaluatedKey == nil {
+			return ids, nil
+		}
+		start = out.LastEvaluatedKey
+	}
 }

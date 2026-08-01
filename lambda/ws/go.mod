@@ -6,6 +6,7 @@ require (
 	github.com/aws/aws-lambda-go v1.54.0
 	github.com/aws/aws-sdk-go-v2 v1.43.3
 	github.com/aws/aws-sdk-go-v2/config v1.32.34
+	github.com/aws/aws-sdk-go-v2/service/apigatewaymanagementapi v1.32.3
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.62.3
 	github.com/golang-jwt/jwt/v5 v5.3.1
 )

@@ -68,6 +68,7 @@ module "api" {
   audio_bucket                = var.audio_bucket
   mongodb_secret_arn          = module.storage.mongodb_secret_arn
   chunked_state_machine_arn   = module.orchestration.chunked_state_machine_arn
+  lyralearn_table_stream_arn  = module.storage.lyralearn_table_stream_arn
   frontend_origin             = "https://${module.frontend.domain_name}"
 }
 
