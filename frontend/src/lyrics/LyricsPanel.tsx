@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { LyricsLine } from '../api/types'
+import { extractTerm, toVocabId } from '../vocab/encounter'
 
 export interface ActiveWord {
   lineIndex: number
@@ -11,12 +12,22 @@ export interface ActiveWord {
 // spans carry data-start/data-end - the live verification hook (and a future
 // click-to-seek seam). Word spacing is CSS margin, not text nodes, so the
 // active background never covers a trailing space.
+//
+// 5.5: when onWordClick is provided, saveable words render as native
+// <button type="button"> (keyboard/AT support for free — no role=button
+// reimplementation); punctuation-only tokens (extractTerm -> '') stay spans.
+// word-saved styling keys off savedVocabIds via the same toVocabId identity
+// the encounter payload uses.
 export default function LyricsPanel({
   lines,
   active,
+  onWordClick,
+  savedVocabIds,
 }: {
   lines: LyricsLine[]
   active: ActiveWord | null
+  onWordClick?: (lineIndex: number, wordIndex: number) => void
+  savedVocabIds?: ReadonlySet<string>
 }) {
   const lineRefs = useRef<(HTMLDivElement | null)[]>([])
   const activeLine = active?.lineIndex ?? -1
@@ -39,20 +50,31 @@ export default function LyricsPanel({
         >
           <p className="lyrics-original">
             {line.words.length > 0
-              ? line.words.map((w, wi) => (
-                  <span
-                    key={wi}
-                    className={
-                      li === active?.lineIndex && wi === active.wordIndex
-                        ? 'word word-active'
-                        : 'word'
-                    }
-                    data-start={w.start}
-                    data-end={w.end}
-                  >
-                    {w.text}
-                  </span>
-                ))
+              ? line.words.map((w, wi) => {
+                  const term = extractTerm(w.text)
+                  const classes = ['word']
+                  if (li === active?.lineIndex && wi === active.wordIndex)
+                    classes.push('word-active')
+                  if (term && savedVocabIds?.has(toVocabId(term))) classes.push('word-saved')
+                  const className = classes.join(' ')
+                  return onWordClick && term ? (
+                    <button
+                      key={wi}
+                      type="button"
+                      className={className}
+                      data-start={w.start}
+                      data-end={w.end}
+                      title={`Save “${term}” to vocabulary`}
+                      onClick={() => onWordClick(li, wi)}
+                    >
+                      {w.text}
+                    </button>
+                  ) : (
+                    <span key={wi} className={className} data-start={w.start} data-end={w.end}>
+                      {w.text}
+                    </span>
+                  )
+                })
               : line.originalText}
           </p>
           {line.translatedText && <p className="lyrics-translation">{line.translatedText}</p>}
