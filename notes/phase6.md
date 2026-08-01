@@ -69,3 +69,25 @@ PASS - Phase 6.2 done-when met.
 Two real cache-miss pipeline runs total (windows -ss 160 and 190 of input_song.mp3, ~7-11 min each at quota 1); both COMPLETE pushes sub-second vs stopDate. The script takes `CUT_SS` (each run permanently fingerprints its window).
 
 **Verdict:** Phase 6.2 done — a connected client receives the push the moment MarkComplete writes (+0.7s), without polling. Next: 6.3 — frontend WebSocket integration (primary status path → WS, polling stays the documented fallback; done-when: polling still works when the WS connection is deliberately killed mid-session). Carry-ins for 6.3: app-level keepalive (browsers can't protocol-ping), maybe a no-op $default route.
+
+## 6.3 — Frontend WebSocket integration
+
+**Date:** 2026-08-01 · **Zero terraform** — pure frontend + a CloudFront deploy.
+
+**Architecture (cache-write):** `JobSocketProvider` (mounted in Shell — socket scoped to the signed-in session, App unmount = teardown) owns one `JobSocket` (`frontend/src/ws/jobSocket.ts`, framework-free). Every frame with a `jobId` → `queryClient.setQueryData(['job', jobId], frame)` — all three existing observers (UploadPanel/Player/JobStatusLine) update with ZERO component changes since 6.2 pinned the push payload to the `Job` shape. `useJobPolling` gates its interval on `useJobSocket().healthy`: healthy → **60s safety net** (6.2 pushes are at-most-once; a missed frame with no interval would stall forever — this keeps "polling is the documented fallback" literally true), unhealthy → the untouched 4.2 backoff. Context default `{healthy:false}` = every pre-6.3 test unchanged.
+
+**JobSocket behavior (unit-pinned):** fresh ID token per connect attempt (1h expiry is handshake-time-only); 240s app-level keepalive (`{"action":"keepalive"}`; the route-less API answers each with an error frame — dropped, along with all frames lacking a string jobId); reconnect ladder 1s→30s cap, reset on successful open, onclose-only driven (onerror always precedes onclose — acting on both double-schedules); `stop()` = deliberate close with reconnect suppressed (kill ≡ stop, one method) — exposed as `window.__cadenzaKillSocket` (ships in prod; server-side delete-connection is useless for the gate — auto-reconnect undoes it in ~1s); StrictMode-safe (stop during the token fetch aborts the connect).
+
+**Two testing-infrastructure findings:**
+1. **jsdom DOES ship a WebSocket** (contrary to common belief) — Shell/App tests would have dialed the real prod wss endpoint from CI. Fixed globally in `src/test/setup.ts`: `delete globalThis.WebSocket` — the suite is WS-less by default (JobSocket's lazy `globalThis.WebSocket` guard turns absence into "permanently unhealthy" = the polling fallback), and WS tests opt in with `vi.stubGlobal('WebSocket', FakeWebSocket)`.
+2. **Post-kill polling resumes at the 15s CAP, not 2s** — `setQueryData` increments React Query's `dataUpdateCount`, so the backoff is already capped mid-session. Correct per §5.1 (backoff protects the API early in a job's life); verified in RQ v5 source (`setOptions` → `#computeRefetchInterval` reschedules when the interval value changes).
+
+**The gate (two runs — the first taught a lesson):**
+- Run 1 (Dragostea window -ss 20, job `a0fa5d6b85c2.9b478525805b`): WS connect + primacy proven (exactly 1 `GET /jobs` in 95s — the 60s net — while the UI stayed current), kill deleted the connection row with no reconnect… then all polling appeared dead. Root cause was NOT the app: **Chrome's memory saver FROZE the backgrounded tab** (CDP unresponsive, all timers stopped), then discarded+reloaded it. The `pollingFallback.test.tsx` unit written mid-diagnosis proved the mechanism sound. Job completed server-side.
+- Run 2 (Trenulețul -ss 30 — fresh source, all Dragostea windows are fingerprinted; job `6f7cfdfa6e21.45bf6ad416e6`, tab kept VISIBLE): measured via the in-page Performance API (the extension's network tracker goes blind after a clear — resource timing is the honest instrument): fetches at 18/81/142/203/263/323s = **60s cadence while WS-primary**, kill at ~340s (row deleted, never reconnected), next poll at **357s = exactly the 15s cap later**, which returned COMPLETE → **"Complete — lyrics are ready." rendered via polling alone on a dead socket.** THE done-when.
+
+**Operational note for live gates (recorded for good):** Chrome freezes fully-hidden/covered tabs (memory saver) — visibilityState must be `visible`, occlusion counts as hidden on Windows. Keep the window side-by-side during any timed browser gate.
+
+**Suite:** 132 → **155 frontend tests / 24 files** (3 interval gating + 12 JobSocket + 7 provider + 1 kill-then-poll pin). `$default` route stays deferred.
+
+**Verdict:** Phase 6.3 done — WS is the primary status path (sub-second updates, 60s background poll), and the polling fallback demonstrably carries a job to completion after a deliberate mid-session kill. Remaining in Phase 6: 6.4 TensorFlow.js sing-along mode (CREPE, lazy-loaded, IndexedDB-cached, Web Worker), 6.5 C++ DSP core (conditional — benchmark first). Project-wide: 2.6 still quota-gated.

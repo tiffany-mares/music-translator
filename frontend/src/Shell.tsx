@@ -3,6 +3,7 @@ import { useAuth } from './auth/AuthContext'
 import UploadPanel from './upload/UploadPanel'
 import ReviewPanel from './vocab/ReviewPanel'
 import { useDueVocab } from './vocab/useDueVocab'
+import { JobSocketProvider } from './ws/JobSocketContext'
 
 type View = 'listen' | 'review'
 
@@ -15,7 +16,11 @@ export default function Shell() {
   const [view, setView] = useState<View>('listen')
   const { data: due } = useDueVocab()
   const dueCount = due?.count ?? 0
+  // JobSocketProvider sits under main.tsx's QueryClientProvider+AuthProvider
+  // and above both always-mounted views; mounting it here scopes the WS to the
+  // signed-in session (App unmounts Shell on sign-out = socket teardown).
   return (
+    <JobSocketProvider>
     <div className="shell">
       <header className="shell-header">
         <span className="wordmark">Cadenza</span>
@@ -41,5 +46,6 @@ export default function Shell() {
         </div>
       </main>
     </div>
+    </JobSocketProvider>
   )
 }
