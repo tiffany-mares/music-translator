@@ -126,3 +126,32 @@ PASS - Phase 5.4 done-when met.
 (Term `iatit` is a whisper transcription artifact in the test song — but that's the point: it's REAL processed-lyrics context, not placeholder text. Warm quiz calls returned well inside the old 10s budget; the 15s timeout is cold-start insurance.)
 
 **Verdict:** Phase 5.4 done — quiz questions reference real lyric context from an actual processed song. Next: 5.5 — frontend integration (vocab review UI + due-today list wired into the Phase 4 player; done-when: full loop — play a song, encounter vocab, review it later, see it scheduled correctly).
+
+## 5.5 — Frontend integration
+
+**Date:** 2026-07-31 · **Zero terraform, no USER apply** — pure frontend + one CloudFront deploy. **PHASE 5 COMPLETE.**
+
+**What shipped (`frontend/src/vocab/` + wiring):** clickable lyric words (encounter), Shell Listen/Review nav with due-count badge, ReviewPanel (due-today list + cloze quiz session), all against the 5.3/5.4 endpoints.
+
+**Decisions:**
+- **Encounter = click a word**, `quality: 0` — SM-2 failure branch (interval 1, reps 0, EF untouched) = clean "new word, due tomorrow" semantics. `vocabId = term.toLowerCase()` (stable identity — re-encounters re-schedule, never duplicate; observed live: clicking "iubirea" also marked the capitalized "Iubirea" elsewhere in the lyrics as saved). `definition = line.translatedText ?? ''` (best available — no per-word translations). `songId = doc.songId` — on the linked path that IS the original song, so quiz context resolves (proven live: item carried `songId=a4f5e4ace189`).
+- Words render as native `<button type="button">` ONLY when `onWordClick` is passed (span fallback keeps all pre-5.5 LyricsPanel tests passing unchanged); punctuation-only tokens stay spans; CSS resets UA chrome so buttons read as words. Repeat click on a saved word is swallowed (double-tap must not reset the schedule with a second quality-0).
+- **`useReviewVocab` = the codebase's first `useMutation`** (a review is a single POST — exactly useMutation's shape, unlike useUploadFlow's orchestration), shared by encounters and quiz answers, invalidating `['vocab','due']` on every success (badge/list refresh even on abandoned sessions — observed live: badge cleared without reload).
+- **Quiz fetched imperatively** into `useQuizSession` (idle→loading→active→done + empty/error), NOT useQuery: a session is a one-shot snapshot indexed locally; caching would invite mid-session refetches (every answer invalidates vocab queries) for zero reuse.
+- **Shell views stay MOUNTED, toggled with `hidden`** — switching to Review must not tear down the upload session or audio (verified: upload form stayed mounted while Review active). Grades Again/Hard/Good/Easy → SM-2 0/3/4/5; after grading, "**Next review: {date}**" from the mutation response + explicit Next/Finish (no auto-advance — test-flaky and steals the evidence).
+
+**Suite:** 92 → **132 frontend tests / 21 files** (`npm test` green, lint clean, build 371KB). Existing test files needed zero changes except App.test.tsx gaining a `getDueVocab` default mock (Shell now mounts useDueVocab).
+
+**API-loop gate (`scripts/verify_5_5.sh`, PASS):** an item created EXACTLY as `buildEncounter` builds it (quality 0, real word `iatit` + line translation + songId from test-song-001 via independent pymongo read) → correctly NOT due today → backdated (both `nextReviewAt` AND `GSI2SK`) → in `/vocab/due` → `/vocab/quiz` cloze prompt byte-equal to the real line → Good(4) → rescheduled out of due → item shows reps=1, GSI2SK == nextReviewAt. (Script bug caught on first run: piping a body into python while ALSO using a heredoc — the heredoc claims stdin; pass JSON as argv like verify_5_4.)
+
+**Browser gate (the done-when, run live 2026-07-31 on https://d38bvqcndpelgt.cloudfront.net as the real user):**
+1. Uploaded byte-identical `input_song.mp3` → instant "Ready (matched an existing song)." → played through with full word-synced lyrics (user-confirmed).
+2. Clicked "iubirea" (and "Primește") → `POST /vocab/review` 200, green word-saved underline; case-insensitive identity marked "Iubirea" too.
+3. Badge correctly dark (due tomorrow) → CLI backdate → reload → **"Review (1)"**, due list "iubirea — And please, my love — Dec 31, 2025".
+4. Start review → cloze "**Și te rog, ____ mea**" (the real Atlas line of the linked ORIGINAL) + translation → Show answer → term+definition → **Good** → "**Next review: Aug 1, 2026**" (tomorrow = SM-2 rep 1) → Finish → "Session complete — 1 word reviewed." → "Nothing due. Nice work." + badge cleared, all without reload.
+5. DynamoDB: reps=1, interval=1, nextReviewAt==GSI2SK==now+1d, songId=a4f5e4ace189. Test items deleted.
+(Note: the mid-play view-switch cross-check was partially covered — the reload for the badge reset the player, but hidden-not-unmounted was verified directly and playback+sync ran the full song before the encounter.)
+
+**Gotcha for the record:** the Chrome extension's file_upload no longer accepts host paths, and page-JS fetch to localhost hangs (PNA/mixed-content) — the user picked the file manually; everything after was automated.
+
+**Verdict: Phase 5.5 done — PHASE 5 COMPLETE.** The full loop works live: play → encounter → review → correctly scheduled. Remaining project-wide: Phase 2.6 (chunked-timing validation) still blocked on the g4dn quota-6 case; §10's remaining phases beyond that.
