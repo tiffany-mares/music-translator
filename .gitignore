@@ -27,3 +27,6 @@ lambda/api-layer/
 tfplan
 lambda/learning/target/
 lambda/learning/.m2/
+
+lambda/ws/.gocache/
+lambda/ws/dist/
