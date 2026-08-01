@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import WordSyncedLyrics, { type PipelineState } from '../lyrics/WordSyncedLyrics'
+import SingAlongPanel from '../singalong/SingAlongPanel'
 import { useJobPolling } from '../upload/useJobPolling'
 import { useAudioUrls } from './useAudioUrls'
 
@@ -40,6 +41,7 @@ export default function Player({
   const [stem, setStem] = useState<StemKey>('raw')
   const [src, setSrc] = useState<string>()
   const [mediaError, setMediaError] = useState(false)
+  const [singAlong, setSingAlong] = useState(false)
 
   const urls = data?.urls ?? {}
   const available = STEM_ORDER.filter((k) => urls[k])
@@ -128,6 +130,17 @@ export default function Player({
           ))}
         </div>
       )}
+      {/* Sing along needs only the mic + model, not the pipeline - available on
+          every mounted player. The toggle is the mode's single open/close control;
+          unmounting the panel tears down mic + worker (useSingAlong cleanup). */}
+      <button
+        className="singalong-toggle"
+        aria-pressed={singAlong}
+        onClick={() => setSingAlong((v) => !v)}
+      >
+        Sing along
+      </button>
+      {singAlong && <SingAlongPanel />}
       <WordSyncedLyrics
         songId={lyricsSongId ?? songId}
         pipelineState={pipelineState}
