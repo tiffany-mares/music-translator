@@ -1,8 +1,20 @@
 import { useState, type FormEvent } from 'react'
 import { Disc3 } from 'lucide-react'
+import heroUrl from '../assets/cadenza-hero-watercolor.png'
+import { Button } from '@/components/ui/button'
+import {
+  GlassCard,
+  GlassCardAction,
+  GlassCardContent,
+  GlassCardDescription,
+  GlassCardHeader,
+  GlassCardTitle,
+} from '@/components/ui/glass-card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { useAuth } from './AuthContext'
-import PasswordField from './PasswordField'
 import { authErrorMessage } from './authErrors'
+import PasswordField from './PasswordField'
 
 type Mode = 'signIn' | 'signUp' | 'confirm'
 
@@ -73,91 +85,163 @@ export default function AuthPage() {
     setInfo(null)
   }
 
-  const inputCls =
-    'w-full rounded-[3px] border border-border bg-surface px-4 py-3 text-sm text-foreground outline-none focus:border-brass'
-  const labelCls = 'label-mono flex flex-col gap-1.5 text-muted-foreground'
-  const submitCls =
-    'font-button w-full rounded-[3px] bg-ink px-4 py-3 text-ink-foreground transition-colors hover:bg-brass hover:text-ink disabled:opacity-50'
-  const linkCls = 'label-mono text-brass hover:underline'
-
-  return (
-    <div className="flex min-h-[80vh] flex-col items-center px-5 pt-20 text-foreground">
-      <span className="flex h-10 w-10 items-center justify-center rounded-[3px] bg-ink text-brass">
-        <Disc3 className="h-4 w-4" aria-hidden />
-      </span>
-      <h1 className="font-content mt-6 text-3xl tracking-tight">cadenza</h1>
-      <p className="label-mono mt-2 text-muted-foreground">[ SONGS AS TEXTBOOKS ]</p>
-      <div className="mt-8 w-full max-w-xs">
+  const banners = (
+    <>
       {error && (
-        <p role="alert" className="mb-3 rounded-[3px] border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p
+          role="alert"
+          className="mb-4 rounded-md border border-destructive/50 bg-destructive/20 px-3 py-2 text-sm"
+        >
           {error}
         </p>
       )}
-      {info && <p className="mb-3 rounded-[3px] border border-sage/40 bg-sage/10 px-3 py-2 text-sm text-sage">{info}</p>}
-
-      {mode === 'signIn' && (
-        <form onSubmit={handleSignIn} aria-label="Sign in" className="space-y-3">
-          <label className={labelCls}>
-            Email
-            <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
-          </label>
-          <PasswordField value={password} onChange={setPassword} autoComplete="current-password" />
-          <button type="submit" disabled={pending} className={submitCls}>
-            Sign in
-          </button>
-          <p className="pt-1 text-center">
-            <button type="button" className={linkCls} onClick={() => switchMode('signUp')}>
-              Need an account? Sign up
-            </button>
-          </p>
-        </form>
+      {info && (
+        <p className="mb-4 rounded-md border border-sage/50 bg-sage/20 px-3 py-2 text-sm">{info}</p>
       )}
+    </>
+  )
 
-      {mode === 'signUp' && (
-        <form onSubmit={handleSignUp} aria-label="Sign up" className="space-y-3">
-          <label className={labelCls}>
-            Email
-            <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
-          </label>
-          <PasswordField value={password} onChange={setPassword} autoComplete="new-password" />
-          <p className="text-xs text-muted-foreground">At least 12 characters, with an uppercase letter, a lowercase letter, and a number.</p>
-          <button type="submit" disabled={pending} className={submitCls}>
-            Create account
-          </button>
-          <p className="pt-1 text-center">
-            <button type="button" className={linkCls} onClick={() => switchMode('signIn')}>
-              Already have an account? Sign in
-            </button>
-          </p>
-        </form>
-      )}
+  return (
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-16">
+      {/* watercolor backdrop the glass blurs against */}
+      <img
+        src={heroUrl}
+        alt=""
+        aria-hidden
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+      <div className="absolute inset-0 bg-ink/55" />
 
-      {mode === 'confirm' && (
-        <form onSubmit={handleConfirm} aria-label="Confirm account" className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            We emailed a confirmation code to <strong className="text-foreground">{email}</strong>.
-          </p>
-          <label className={labelCls}>
-            Confirmation code
-            <input
-              className={inputCls}
-              inputMode="numeric"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              required
-              autoComplete="one-time-code"
-            />
-          </label>
-          <button type="submit" disabled={pending} className={submitCls}>
-            Confirm
-          </button>
-          <p className="pt-1 text-center">
-            <button type="button" className={linkCls} onClick={() => void run(() => auth.resendCode(email))}>
-              Resend code
-            </button>
-          </p>
-        </form>
-      )}
+      <div className="relative z-10 flex w-full max-w-sm flex-col items-center">
+        <span className="hold-bob flex h-10 w-10 items-center justify-center rounded-[3px] bg-ink text-brass">
+          <Disc3 className="h-4 w-4" aria-hidden />
+        </span>
+        <h1 className="font-content mt-4 text-3xl tracking-tight text-white">cadenza</h1>
+        <p className="label-mono mt-2 text-white/70">[ SONGS AS TEXTBOOKS ]</p>
+
+        <GlassCard className="mt-8 w-full">
+          {mode === 'signIn' && (
+            <>
+              <GlassCardHeader>
+                <GlassCardTitle>Sign in to your account</GlassCardTitle>
+                <GlassCardDescription className="text-white/70">
+                  Your saved words and review queue live here.
+                </GlassCardDescription>
+                <GlassCardAction>
+                  <Button variant="link" className="text-brass" onClick={() => switchMode('signUp')}>
+                    Need an account? Sign up
+                  </Button>
+                </GlassCardAction>
+              </GlassCardHeader>
+              <GlassCardContent>
+                {banners}
+                <form onSubmit={handleSignIn} aria-label="Sign in" className="flex flex-col gap-5">
+                  <div className="grid gap-2">
+                    <Label htmlFor="auth-email">Email</Label>
+                    <Input
+                      id="auth-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      autoComplete="email"
+                    />
+                  </div>
+                  <PasswordField
+                    value={password}
+                    onChange={setPassword}
+                    autoComplete="current-password"
+                  />
+                  <Button type="submit" disabled={pending} className="w-full">
+                    Sign in
+                  </Button>
+                </form>
+              </GlassCardContent>
+            </>
+          )}
+
+          {mode === 'signUp' && (
+            <>
+              <GlassCardHeader>
+                <GlassCardTitle>Create your account</GlassCardTitle>
+                <GlassCardDescription className="text-white/70">
+                  Free — it syncs your vocabulary across devices.
+                </GlassCardDescription>
+                <GlassCardAction>
+                  <Button variant="link" className="text-brass" onClick={() => switchMode('signIn')}>
+                    Already have an account? Sign in
+                  </Button>
+                </GlassCardAction>
+              </GlassCardHeader>
+              <GlassCardContent>
+                {banners}
+                <form onSubmit={handleSignUp} aria-label="Sign up" className="flex flex-col gap-5">
+                  <div className="grid gap-2">
+                    <Label htmlFor="auth-email">Email</Label>
+                    <Input
+                      id="auth-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      autoComplete="email"
+                    />
+                  </div>
+                  <PasswordField value={password} onChange={setPassword} autoComplete="new-password" />
+                  <p className="text-xs text-white/70">
+                    At least 12 characters, with an uppercase letter, a lowercase letter, and a
+                    number.
+                  </p>
+                  <Button type="submit" disabled={pending} className="w-full">
+                    Create account
+                  </Button>
+                </form>
+              </GlassCardContent>
+            </>
+          )}
+
+          {mode === 'confirm' && (
+            <>
+              <GlassCardHeader>
+                <GlassCardTitle>Confirm your account</GlassCardTitle>
+                <GlassCardDescription className="text-white/70">
+                  We emailed a confirmation code to <strong className="text-white">{email}</strong>.
+                </GlassCardDescription>
+              </GlassCardHeader>
+              <GlassCardContent>
+                {banners}
+                <form
+                  onSubmit={handleConfirm}
+                  aria-label="Confirm account"
+                  className="flex flex-col gap-5"
+                >
+                  <div className="grid gap-2">
+                    <Label htmlFor="auth-code">Confirmation code</Label>
+                    <Input
+                      id="auth-code"
+                      inputMode="numeric"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      required
+                      autoComplete="one-time-code"
+                    />
+                  </div>
+                  <Button type="submit" disabled={pending} className="w-full">
+                    Confirm
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="text-brass"
+                    onClick={() => void run(() => auth.resendCode(email))}
+                  >
+                    Resend code
+                  </Button>
+                </form>
+              </GlassCardContent>
+            </>
+          )}
+        </GlassCard>
       </div>
     </div>
   )
