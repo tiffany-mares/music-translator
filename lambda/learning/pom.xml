@@ -56,6 +56,31 @@
       <artifactId>url-connection-client</artifactId>
       <version>${aws.sdk.version}</version>
     </dependency>
+    <!-- 5.4: read the Mongo URI secret at first quiz use (client is lazy, so
+         review/due cold starts are unchanged). Same lightweight-HTTP story. -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>secretsmanager</artifactId>
+      <version>${aws.sdk.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>netty-nio-client</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>apache-client</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <!-- 5.4: lyrics context from Atlas. Document API only (no POJO codecs =
+         no reflection, shade-safe). SRV lookup uses the JRE's JNDI DNS
+         provider - no extra dependency. Pulls mongodb-driver-core + bson. -->
+    <dependency>
+      <groupId>org.mongodb</groupId>
+      <artifactId>mongodb-driver-sync</artifactId>
+      <version>5.1.4</version>
+    </dependency>
     <!-- Request parse + response build via JsonObject only (no reflection:
          shade-safe, explicit type validation). -->
     <dependency>
@@ -98,6 +123,13 @@
               </excludes>
             </filter>
           </filters>
+          <!-- 5.4: merge META-INF/services across jars. The Mongo driver ships
+               SPI descriptors (com.mongodb.spi.dns.*); no two current jars
+               collide, but merging is the correct default and the transformer
+               is deterministic, so reproducible-build hashing is preserved. -->
+          <transformers>
+            <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+          </transformers>
         </configuration>
         <executions>
           <execution>

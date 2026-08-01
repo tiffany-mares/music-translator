@@ -11,6 +11,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -24,13 +25,31 @@ class HandlerTest {
     private static final String SUB = "user-sub-123";
 
     private final InMemoryVocabRepository repo = new InMemoryVocabRepository();
+    private final InMemoryLyricsRepository lyricsRepo = new InMemoryLyricsRepository();
 
     private Handler handler() {
         return handler(NOW);
     }
 
     private Handler handler(Instant now) {
-        return new Handler(new VocabService(repo, Clock.fixed(now, ZoneOffset.UTC)));
+        Clock clock = Clock.fixed(now, ZoneOffset.UTC);
+        return new Handler(new VocabService(repo, clock),
+                new QuizService(repo, lyricsRepo, clock));
+    }
+
+    private static LyricLine line(int n, String ro, String en) {
+        return new LyricLine(n, ro, en);
+    }
+
+    private void addSong(String songId, LyricLine... lines) {
+        lyricsRepo.add(new SongLyrics(songId, List.of(lines)));
+    }
+
+    private JsonObject quiz() {
+        APIGatewayV2HTTPResponse res = handler()
+                .handleRequest(event("GET", "/vocab/quiz", null, SUB, false), null);
+        assertEquals(200, res.getStatusCode());
+        return body(res);
     }
 
     private static APIGatewayV2HTTPEvent event(String method, String path, String body,
@@ -251,6 +270,125 @@ class HandlerTest {
         JsonObject b = body(res);
         assertEquals(0, b.get("count").getAsInt());
         assertEquals(0, b.getAsJsonArray("items").size());
+    }
+
+    // ---- GET /vocab/quiz ----
+
+    @Test
+    void quizClozeFromLinkedSong() {
+        repo.seed(SUB, "v1", 2.5, 1, 0, "2026-07-01T00:00:00Z", "inima", "heart", "song-1");
+        addSong("song-1",
+                line(0, "Nu ma parasi acum", "Don't leave me now"),
+                line(3, "Inima mea e a ta", "My heart is yours"));
+        JsonObject q = quiz().getAsJsonArray("questions").get(0).getAsJsonObject();
+        assertEquals("v1", q.get("vocabId").getAsString());
+        assertEquals("inima", q.get("term").getAsString());
+        assertEquals("heart", q.get("definition").getAsString());
+        assertTrue(q.get("hasContext").getAsBoolean());
+        assertEquals("song-1", q.get("songId").getAsString());
+        assertEquals(3, q.get("lineNumber").getAsInt());
+        assertEquals("____ mea e a ta", q.get("prompt").getAsString()); // real line, case-insensitively blanked
+        assertEquals("My heart is yours", q.get("translation").getAsString());
+    }
+
+    @Test
+    void quizFallbackFindsTermAcrossSongsWhenUnlinked() {
+        repo.seed(SUB, "v1", 2.5, 1, 0, "2026-07-01T00:00:00Z", "dor", "longing"); // no songId
+        addSong("song-a", line(0, "fara cuvantul cautat", "without the sought word"));
+        addSong("song-b", line(7, "Mi-e dor de tine", "I miss you"));
+        JsonObject q = quiz().getAsJsonArray("questions").get(0).getAsJsonObject();
+        assertTrue(q.get("hasContext").getAsBoolean());
+        assertEquals("song-b", q.get("songId").getAsString());
+        assertEquals("Mi-e ____ de tine", q.get("prompt").getAsString());
+    }
+
+    @Test
+    void quizFallsBackWhenTermAbsentFromLinkedSong() {
+        repo.seed(SUB, "v1", 2.5, 1, 0, "2026-07-01T00:00:00Z", "dor", "longing", "song-a");
+        addSong("song-a", line(0, "nimic aici", "nothing here"));
+        addSong("song-b", line(2, "Ce dor imi e", "How I long"));
+        JsonObject q = quiz().getAsJsonArray("questions").get(0).getAsJsonObject();
+        assertTrue(q.get("hasContext").getAsBoolean());
+        assertEquals("song-b", q.get("songId").getAsString());
+        assertEquals(2, q.get("lineNumber").getAsInt());
+    }
+
+    @Test
+    void quizNoContextAnywhereStillReturnsTheQuestion() {
+        repo.seed(SUB, "v1", 2.5, 1, 0, "2026-07-01T00:00:00Z", "zzzqqx", "nonsense");
+        addSong("song-a", line(0, "Inima mea", "My heart"));
+        JsonObject b = quiz();
+        assertEquals(1, b.get("count").getAsInt());
+        JsonObject q = b.getAsJsonArray("questions").get(0).getAsJsonObject();
+        assertEquals("zzzqqx", q.get("term").getAsString());
+        assertFalse(q.get("hasContext").getAsBoolean());
+        assertTrue(q.get("songId").isJsonNull());
+        assertTrue(q.get("lineNumber").isJsonNull());
+        assertTrue(q.get("prompt").isJsonNull());
+        assertTrue(q.get("translation").isJsonNull());
+    }
+
+    @Test
+    void quizWholeWordOnlyDespiteSubstringPrefilter() {
+        // The fake prefilter returns song-a ("in" IS a substring of "inima");
+        // the word matcher must still reject it.
+        repo.seed(SUB, "v1", 2.5, 1, 0, "2026-07-01T00:00:00Z", "in", "in");
+        addSong("song-a", line(0, "inima mea", "my heart"));
+        JsonObject q = quiz().getAsJsonArray("questions").get(0).getAsJsonObject();
+        assertFalse(q.get("hasContext").getAsBoolean());
+    }
+
+    @Test
+    void quizBlanksEveryOccurrencePreservingPunctuation() {
+        repo.seed(SUB, "v1", 2.5, 1, 0, "2026-07-01T00:00:00Z", "inima", "heart", "song-1");
+        addSong("song-1", line(5, "Inima, inima, asta-i inima", "Heart, heart, that's the heart"));
+        JsonObject q = quiz().getAsJsonArray("questions").get(0).getAsJsonObject();
+        assertEquals("____, ____, asta-i ____", q.get("prompt").getAsString());
+    }
+
+    @Test
+    void quizMatchesRomanianDiacriticsAcrossCase() {
+        repo.seed(SUB, "v1", 2.5, 1, 0, "2026-07-01T00:00:00Z", "iubește", "loves", "song-1");
+        addSong("song-1", line(1, "Iubește-mă ca la tine acasă", "Love me like at your home"));
+        JsonObject q = quiz().getAsJsonArray("questions").get(0).getAsJsonObject();
+        assertTrue(q.get("hasContext").getAsBoolean());
+        assertEquals("____-mă ca la tine acasă", q.get("prompt").getAsString());
+    }
+
+    @Test
+    void quizMultipleDueItemsMostOverdueFirst() {
+        repo.seed(SUB, "newer", 2.5, 1, 0, "2026-07-10T00:00:00Z", "dor", "longing", "song-1");
+        repo.seed(SUB, "older", 2.5, 1, 0, "2026-06-01T00:00:00Z", "inima", "heart", "song-1");
+        addSong("song-1", line(0, "Mi-e dor de inima ta", "I miss your heart"));
+        JsonObject b = quiz();
+        assertEquals(2, b.get("count").getAsInt());
+        assertEquals("older", b.getAsJsonArray("questions").get(0).getAsJsonObject()
+                .get("vocabId").getAsString());
+    }
+
+    @Test
+    void quizEmptyDueReturnsEmptyQuestions() {
+        JsonObject b = quiz();
+        assertEquals(0, b.get("count").getAsInt());
+        assertEquals(0, b.getAsJsonArray("questions").size());
+    }
+
+    @Test
+    void quizItemWithoutTermHasNoContext() {
+        repo.seed(SUB, "v1", 2.5, 1, 0, "2026-07-01T00:00:00Z", null, null);
+        JsonObject q = quiz().getAsJsonArray("questions").get(0).getAsJsonObject();
+        assertTrue(q.get("term").isJsonNull());
+        assertFalse(q.get("hasContext").getAsBoolean());
+    }
+
+    @Test
+    void quizCapsAtTwentyQuestions() {
+        for (int i = 0; i < 25; i++) {
+            repo.seed(SUB, "w" + i, 2.5, 1, 0, "2026-07-01T00:00:00Z", "term" + i, "def");
+        }
+        JsonObject b = quiz();
+        assertEquals(20, b.get("count").getAsInt());
+        assertEquals(20, b.getAsJsonArray("questions").size());
     }
 
     @Test
