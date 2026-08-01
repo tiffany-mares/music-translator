@@ -8,6 +8,12 @@
       "Resource": "arn:aws:s3:::__BUCKET__/songs/*"
     },
     {
+      "Sid": "WriteMetadataLanguage",
+      "Effect": "Allow",
+      "Action": "dynamodb:UpdateItem",
+      "Resource": "arn:aws:dynamodb:__REGION__:__ACCOUNT_ID__:table/LyraLearnTable"
+    },
+    {
       "Sid": "OwnLogsOnly",
       "Effect": "Allow",
       "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],

@@ -23,10 +23,12 @@ from stages.translate import translate_lines
 MODEL_DIR = os.environ.get("TRANSLATE_MODEL_DIR", "/opt/model")
 MONGODB_SECRET_ARN = os.environ.get("MONGODB_SECRET_ARN", "")
 MONGO_DB, MONGO_COLLECTION = "lyralearn", "lyrics"
+TABLE = os.environ.get("TABLE_NAME", "LyraLearnTable")
 
 _S3 = None
 _TRANSLATOR = None
 _MONGO = None
+_DDB = None
 
 
 def _s3():
@@ -57,6 +59,29 @@ def _mongo():
         _MONGO = MongoClient(uri, serverSelectionTimeoutMS=5000,
                              connectTimeoutMS=5000, maxPoolSize=5)
     return _MONGO
+
+
+def _ddb():
+    global _DDB
+    if _DDB is None:
+        _DDB = boto3.client("dynamodb")
+    return _DDB
+
+
+def _set_metadata_language(song_id, source_language, target_language):
+    """Best-effort (Phase 7): the public catalog (GET /songs) reads language
+    off the METADATA item for its filter. A failure here must never fail the
+    pipeline - the song just lists with sourceLanguage null until backfilled."""
+    try:
+        _ddb().update_item(
+            TableName=TABLE,
+            Key={"PK": {"S": f"SONG#{song_id}"}, "SK": {"S": "METADATA"}},
+            UpdateExpression="SET sourceLanguage = :sl, targetLanguage = :tl",
+            ExpressionAttributeValues={":sl": {"S": source_language},
+                                       ":tl": {"S": target_language}})
+    except Exception as e:  # noqa: BLE001 - best-effort by design
+        print(f"METADATA LANGUAGE UPDATE FAILED for {song_id} "
+              f"(catalog lists null language, backfill later): {e!r}")
 
 
 def _mongo_upsert(doc):
@@ -101,4 +126,5 @@ def handler(event, context):
         ContentType="application/json",
     )
     _mongo_upsert(doc)
+    _set_metadata_language(song_id, doc["sourceLanguage"], doc["targetLanguage"])
     return {"lyricsKey": lyrics_key, "lineCount": len(lines)}

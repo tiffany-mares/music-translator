@@ -51,3 +51,49 @@ def test_backfill_upserts_each_doc_and_creates_unique_index():
     assert backfill(s3, coll, "bucket") == (2, 1)
     assert set(coll.docs) == {"s1", "s2"}
     assert coll.indexes == [("songId", True)]
+
+
+# --- Phase 7: sourceLanguage -> METADATA backfill ----------------------------
+
+import importlib.util as _ilu
+from pathlib import Path as _Path
+
+_BF_SPEC = _ilu.spec_from_file_location(
+    "backfill_source_language",
+    _Path(__file__).resolve().parents[1] / "scripts" / "backfill_source_language.py")
+bf_lang = _ilu.module_from_spec(_BF_SPEC)
+_BF_SPEC.loader.exec_module(bf_lang)
+
+
+class _FakeColl:
+    def __init__(self, docs):
+        self._docs = docs
+
+    def find(self, _filter, _proj):
+        return iter(self._docs)
+
+
+class _FakeDdbClient:
+    def __init__(self):
+        self.update_calls = []
+
+    def update_item(self, **kwargs):
+        self.update_calls.append(kwargs)
+        return {}
+
+
+def test_backfill_source_language_updates_metadata_and_skips_docs_without_language():
+    coll = _FakeColl([
+        {"songId": "s1", "sourceLanguage": "ro", "targetLanguage": "en"},
+        {"songId": "s2"},  # no language -> skipped
+        {"songId": "s3", "sourceLanguage": "fr"},  # no target -> only :sl
+    ])
+    ddb = _FakeDdbClient()
+    done, skipped = bf_lang.backfill(coll, ddb, "TestTable")
+    assert (done, skipped) == (2, 1)
+    first = ddb.update_calls[0]
+    assert first["Key"]["PK"]["S"] == "SONG#s1"
+    assert first["ConditionExpression"] == "attribute_exists(PK)"
+    assert first["ExpressionAttributeValues"][":sl"] == {"S": "ro"}
+    assert first["ExpressionAttributeValues"][":tl"] == {"S": "en"}
+    assert ":tl" not in ddb.update_calls[1]["ExpressionAttributeValues"]

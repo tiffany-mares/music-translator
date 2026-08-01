@@ -126,3 +126,43 @@ def test_no_secret_configured_skips_mongo_entirely(monkeypatch):
     monkeypatch.setattr(handler_mod, "_mongo",
                         lambda: (_ for _ in ()).throw(AssertionError("must not construct client")))
     assert handler_mod.handler({"songId": "s", "bucket": "b", "transcriptKey": "k"}, None)["lineCount"] == 1
+
+
+# --- Phase 7: METADATA language threading for the public catalog -------------
+
+class FakeDdb:
+    def __init__(self, fail=False):
+        self.fail = fail
+        self.update_calls = []
+
+    def update_item(self, **kwargs):
+        if self.fail:
+            raise RuntimeError("ddb down")
+        self.update_calls.append(kwargs)
+        return {}
+
+
+def test_handler_threads_language_into_metadata(monkeypatch):
+    fake_s3 = FakeS3(_transcript())
+    _wire(monkeypatch, fake_s3)
+    ddb = FakeDdb()
+    monkeypatch.setattr(handler_mod, "_ddb", lambda: ddb)
+
+    handler_mod.handler(
+        {"songId": "test-song-001", "bucket": "b", "transcriptKey": "k"}, None)
+
+    call = ddb.update_calls[0]
+    assert call["Key"] == {"PK": {"S": "SONG#test-song-001"}, "SK": {"S": "METADATA"}}
+    assert call["ExpressionAttributeValues"][":sl"] == {"S": "ro"}
+    assert call["ExpressionAttributeValues"][":tl"] == {"S": "en"}
+
+
+def test_metadata_language_update_failure_never_fails_the_pipeline(monkeypatch):
+    fake_s3 = FakeS3(_transcript())
+    _wire(monkeypatch, fake_s3)
+    monkeypatch.setattr(handler_mod, "_ddb", lambda: FakeDdb(fail=True))
+
+    result = handler_mod.handler(
+        {"songId": "test-song-001", "bucket": "b", "transcriptKey": "k"}, None)
+
+    assert result["lineCount"] == 1  # S3 write of record intact
