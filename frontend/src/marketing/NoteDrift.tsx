@@ -53,6 +53,10 @@ export default function NoteDrift({ className = '' }: { className?: string }) {
       particles = Array.from({ length: COUNT }, () => seed(w, h))
     }
     resize()
+    // ResizeObserver, not window resize: a hidden/backgrounded tab can mount
+    // at 0x0 and would otherwise stay blank until a window resize.
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(resize) : null
+    observer?.observe(canvas)
     window.addEventListener('resize', resize)
 
     let last = performance.now()
@@ -80,6 +84,7 @@ export default function NoteDrift({ className = '' }: { className?: string }) {
 
     return () => {
       cancelAnimationFrame(raf)
+      observer?.disconnect()
       window.removeEventListener('resize', resize)
     }
   }, [])
