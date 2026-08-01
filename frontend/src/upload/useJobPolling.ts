@@ -6,12 +6,12 @@ import { useJobSocket } from '../ws/JobSocketContext'
 import { jobPollingInterval } from './jobPolling'
 
 export function useJobPolling(jobId: string | null): UseQueryResult<Job, Error> {
-  const { getIdToken } = useAuth()
+  const { getOptionalIdToken } = useAuth()
   const { healthy } = useJobSocket() // context default: false -> pure 4.2 polling
   return useQuery({
     queryKey: ['job', jobId],
     enabled: jobId !== null,
-    queryFn: async () => getJob(await getIdToken(), jobId!),
+    queryFn: async () => getJob(await getOptionalIdToken(), jobId!),
     // WS healthy -> 60s safety net (pushes are at-most-once; the socket is the
     // primary path). WS down -> the 4.2 backoff schedule. The mount fetch runs
     // either way, so a frame that raced ahead of mount can't strand us dataless.

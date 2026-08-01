@@ -3,6 +3,16 @@ export interface CreateSongResponse {
   uploadUrl: string
 }
 
+// One entry in the public site-wide catalog (GET /songs, Phase 7).
+export interface SongListing {
+  songId: string
+  title: string
+  artist: string
+  status: string
+  createdAt: string
+  sourceLanguage: string | null
+}
+
 export type JobStatus = 'QUEUED' | 'PROCESSING' | 'COMPLETE' | 'FAILED'
 
 export interface Job {

@@ -18,7 +18,7 @@ export type UploadFlowState =
   | { step: 'error'; message: string }
 
 export function useUploadFlow() {
-  const { getIdToken } = useAuth()
+  const { getOptionalIdToken } = useAuth()
   const [state, setState] = useState<UploadFlowState>({ step: 'idle' })
   // Survives the state machine so retryProcess can re-POST after startFailed.
   const songIdRef = useRef<string | null>(null)
@@ -51,26 +51,26 @@ export function useUploadFlow() {
       const meta = title ? { title } : undefined
       try {
         setState({ step: 'creating' })
-        let created = await createSong(await getIdToken(), meta)
+        let created = await createSong(await getOptionalIdToken(), meta)
         setState({ step: 'uploading', songId: created.songId })
         try {
           await uploadFile(created.uploadUrl, file)
         } catch {
           // Presign may have expired (15-min TTL). One automatic re-presign;
           // POST /songs mints a NEW songId, so carry the fresh one forward.
-          created = await createSong(await getIdToken(), meta)
+          created = await createSong(await getOptionalIdToken(), meta)
           setState({ step: 'uploading', songId: created.songId })
           await uploadFile(created.uploadUrl, file)
         }
         songIdRef.current = created.songId
         setState({ step: 'processing', songId: created.songId })
         // Fresh token: the PUT of a large file can outlive short token windows.
-        applyOutcome(await processSong(await getIdToken(), created.songId))
+        applyOutcome(await processSong(await getOptionalIdToken(), created.songId))
       } catch (err) {
         setState({ step: 'error', message: err instanceof Error ? err.message : 'Upload failed' })
       }
     },
-    [getIdToken],
+    [getOptionalIdToken],
   )
 
   // The 500 contract says: retry POST /process only. Never re-uploads.
@@ -79,11 +79,11 @@ export function useUploadFlow() {
     if (!songId) return
     try {
       setState({ step: 'processing', songId })
-      applyOutcome(await processSong(await getIdToken(), songId))
+      applyOutcome(await processSong(await getOptionalIdToken(), songId))
     } catch (err) {
       setState({ step: 'error', message: err instanceof Error ? err.message : 'Retry failed' })
     }
-  }, [getIdToken])
+  }, [getOptionalIdToken])
 
   const reset = useCallback(() => setState({ step: 'idle' }), [])
 

@@ -6,6 +6,7 @@ import {
   getJob,
   getLyrics,
   getQuiz,
+  getSongs,
   reviewVocab,
   toProcessOutcome,
   uploadFile,
@@ -236,5 +237,49 @@ describe('getQuiz', () => {
   it('throws ApiError on non-2xx', async () => {
     fetchMock.mockResolvedValue(jsonResponse(500, null))
     await expect(getQuiz('tok')).rejects.toMatchObject({ status: 500 })
+  })
+})
+
+// --- Phase 7 (lovable-reskin): public routes work without a token ------------
+
+describe('anonymous public requests', () => {
+  it('createSong with null token sends NO Authorization header', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(201, { songId: 'x', uploadUrl: 'u' }))
+    await createSong(null, { title: 'Anon' })
+    const [, init] = fetchMock.mock.calls[0]
+    expect(init.headers.Authorization).toBeUndefined()
+    expect(init.headers['Content-Type']).toBe('application/json')
+  })
+
+  it('getJob with null token sends no auth header and parses the job', async () => {
+    const job = { jobId: 's1.aaaa', songId: 's1', status: 'QUEUED' }
+    fetchMock.mockResolvedValue(jsonResponse(200, job))
+    expect(await getJob(null, 's1.aaaa')).toEqual(job)
+    const [, init] = fetchMock.mock.calls[0]
+    expect(init.headers?.Authorization).toBeUndefined()
+  })
+})
+
+describe('getSongs', () => {
+  it('fetches the public catalog without a token', async () => {
+    const songs = [{ songId: 'a', title: 'T', artist: 'A', status: 'VALIDATED',
+      createdAt: '2026-07-01T00:00:00+00:00', sourceLanguage: 'ro' }]
+    fetchMock.mockResolvedValue(jsonResponse(200, { songs }))
+    expect(await getSongs(null)).toEqual(songs)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toMatch(/\/songs$/)
+    expect(init?.headers?.Authorization).toBeUndefined()
+  })
+
+  it('still sends the bearer token when signed in', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, { songs: [] }))
+    await getSongs('tok')
+    const [, init] = fetchMock.mock.calls[0]
+    expect(init.headers.Authorization).toBe('Bearer tok')
+  })
+
+  it('throws ApiError on failure', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(500, { error: 'scan failed' }))
+    await expect(getSongs(null)).rejects.toMatchObject({ status: 500 })
   })
 })
