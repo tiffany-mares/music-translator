@@ -26,4 +26,7 @@ public interface VocabRepository {
 
     /** GSI2 due-today query: GSI2PK = USER#{userId} AND GSI2SK <= now (ISO). */
     List<DueItem> queryDue(String userId, Instant now);
+
+    /** Every vocab item the user has, soonest next-review first (Phase 7 follow-up: the collection view). */
+    List<DueItem> queryAll(String userId);
 }

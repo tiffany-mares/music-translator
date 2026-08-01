@@ -294,6 +294,7 @@ resource "aws_apigatewayv2_route" "vocab" {
     "POST /vocab/review",
     "GET /vocab/due",
     "GET /vocab/quiz",
+    "GET /vocab",
   ])
   api_id             = aws_apigatewayv2_api.http.id
   route_key          = each.key
