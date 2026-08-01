@@ -2,6 +2,7 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as amplifyAuth from 'aws-amplify/auth'
+import * as api from './api/client'
 import App from './App'
 import { renderWithProviders } from './test/renderWithProviders'
 
@@ -9,6 +10,7 @@ vi.mock('aws-amplify/auth')
 // Shell renders UploadPanel; mock the api module so no real fetch layer loads.
 vi.mock('./api/client')
 const mocked = vi.mocked(amplifyAuth)
+const mockedApi = vi.mocked(api)
 
 type Session = Awaited<ReturnType<typeof amplifyAuth.fetchAuthSession>>
 const signedOutSession = {} as Session
@@ -21,7 +23,12 @@ function renderApp() {
 }
 
 describe('App auth states', () => {
-  beforeEach(() => vi.resetAllMocks())
+  beforeEach(() => {
+    vi.resetAllMocks()
+    // Shell mounts useDueVocab; an auto-mock resolving undefined would log
+    // React Query "data cannot be undefined" noise in every signed-in test.
+    mockedApi.getDueVocab.mockResolvedValue({ items: [], count: 0 })
+  })
 
   it('shows loading, then the sign-in form when no session exists', async () => {
     mocked.fetchAuthSession.mockResolvedValue(signedOutSession)

@@ -261,3 +261,174 @@ body {
   color: #6b6b64;
   font-size: 0.85rem;
 }
+
+/* --- Shell nav (5.5) --- */
+.shell-nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.shell-nav button {
+  padding: 0.35rem 0.9rem;
+  border: 1px solid #c9c9c2;
+  border-radius: 6px;
+  background: #fff;
+  color: #1a1a2e;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.shell-nav button[aria-pressed='true'] {
+  background: #1a1a2e;
+  color: #fafaf7;
+  font-weight: 600;
+}
+
+/* --- Clickable lyric words (5.5) --- */
+/* Word buttons share .word's margin/radius/padding; this only resets UA
+   button chrome so they read as words. Hover excludes the active word so
+   the sync highlight always wins. */
+.lyrics-original button.word {
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.lyrics-original button.word:hover:not(.word-active),
+.lyrics-original button.word:focus-visible:not(.word-active) {
+  background: #e9e5d8;
+}
+
+.lyrics-original .word-saved {
+  box-shadow: inset 0 -2px 0 #2e6e46;
+}
+
+/* --- Review panel (5.5) --- */
+.review-panel {
+  max-width: 26rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  color: #1a1a2e;
+}
+
+.review-heading {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.due-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.due-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  border: 1px solid #e2e2da;
+  border-radius: 6px;
+  padding: 0.45rem 0.6rem;
+}
+
+.due-term {
+  font-weight: 600;
+}
+
+.due-definition {
+  color: #6b6b64;
+  flex: 1;
+  min-width: 0;
+}
+
+.due-date {
+  color: #6b6b64;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.review-panel .start-review {
+  padding: 0.6rem 1.2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fafaf7;
+  background: #1a1a2e;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.quiz-card {
+  border: 1px solid #c9c9c2;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+
+.quiz-card button {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid #c9c9c2;
+  border-radius: 6px;
+  background: #fff;
+  color: #1a1a2e;
+  cursor: pointer;
+}
+
+.quiz-card button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.quiz-progress {
+  margin: 0;
+  color: #6b6b64;
+  font-size: 0.85rem;
+}
+
+.quiz-prompt {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.quiz-translation {
+  margin: 0;
+  color: #6b6b64;
+  font-size: 0.9rem;
+}
+
+.quiz-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.quiz-term {
+  margin: 0;
+  font-weight: 600;
+}
+
+.quiz-definition {
+  margin: 0;
+  color: #6b6b64;
+}
+
+.quiz-grades {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.next-review {
+  margin: 0;
+  color: #2e6e46;
+  font-weight: 600;
+}
