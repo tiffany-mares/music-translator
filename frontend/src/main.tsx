@@ -4,7 +4,12 @@ import './amplifyConfig'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+// Transition state (lovable-reskin): index.css holds the legacy component
+// classes until every screen is re-skinned (deleted in the final task);
+// styles.css is the Cadenza theme and must import AFTER it so shared
+// globals resolve to the new theme.
 import './index.css'
+import './styles.css'
 import App from './App.tsx'
 import { AuthProvider } from './auth/AuthContext'
 

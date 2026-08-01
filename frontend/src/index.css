@@ -1,17 +1,5 @@
-:root {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  color: #1a1a2e;
-  background: #fafaf7;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  min-height: 100vh;
-}
+/* Page-level globals now live in styles.css (Cadenza theme). This file keeps
+   only the legacy component classes until every screen is re-skinned. */
 
 .wordmark {
   font-family: Georgia, 'Times New Roman', serif;
