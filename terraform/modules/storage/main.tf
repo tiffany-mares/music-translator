@@ -25,6 +25,11 @@ resource "aws_dynamodb_table" "main" {
   hash_key     = "PK"
   range_key    = "SK"
 
+  # Phase 6.2: job-status pushes. NEW_IMAGE only - the push handler never
+  # needs the old image. Enabling on the existing table is an in-place update.
+  stream_enabled   = true
+  stream_view_type = "NEW_IMAGE"
+
   dynamic "attribute" {
     for_each = toset(["PK", "SK", "GSI1PK", "GSI1SK", "GSI2PK", "GSI2SK", "GSI3PK"])
     content {
@@ -82,3 +87,4 @@ resource "aws_secretsmanager_secret" "mongodb" {
 }
 
 output "mongodb_secret_arn" { value = aws_secretsmanager_secret.mongodb.arn }
+output "lyralearn_table_stream_arn" { value = aws_dynamodb_table.main.stream_arn }
