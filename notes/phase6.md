@@ -119,3 +119,17 @@ Two real cache-miss pipeline runs total (windows -ss 160 and 190 of input_song.m
 **Suite:** 155 → **185 frontend tests / 27 files** (10 decode + 10 hook + 8 panel + 2 player; the plan's 184 undercounted decode by one). Lint clean (4 pre-existing warnings only).
 
 **Verdict:** Phase 6.4 done — CREPE lazy-loads in a Web Worker on mode open, caches in IndexedDB, and the second open is measurably ~10× faster with the source label proving it's the IDB cache, not HTTP caching. Remaining in Phase 6: 6.5 C++ DSP core (CONDITIONAL — benchmark Basic Pitch tempo/beat quality first, build only if a gap is confirmed). Project-wide: 2.6 still quota-gated.
+
+## 6.5 — C++ DSP core: explicitly skipped
+
+**Date:** 2026-08-01 · **Zero code** — this is the done-when's "confirmed unnecessary and explicitly skipped" branch, taken deliberately.
+
+**The decision:** no benchmark, no `dsp_core`. The spec made 6.5 conditional on "a measurable gap in Basic Pitch's stock tempo/beat detection" — but the question dissolved before it could be measured:
+
+1. **Zero consumers.** Nothing in the shipped product reads tempo/beat data. The player syncs on Whisper word timings; vocab/quiz use lyrics; sing-along v1 (6.4) uses live mic pitch. Even Basic Pitch's existing `pitch.json` output has no serving endpoint — that was 6.4's explicitly deferred prerequisite. A C++ module would improve data with zero readers.
+2. **The dependency chain runs the wrong way.** Before beat/tempo *quality* can matter, three unbuilt things must exist: a pitch/tempo serving endpoint (+ IAM), stitched-key threading into DynamoDB, and a frontend feature that renders rhythm (melody comparison, beat-snapped highlighting). 6.5 would optimize stage three of a pipeline whose stage one doesn't exist.
+3. **The only field evidence points to "no gap."** Phase 1.4's listener verdict on the real test song noted no rhythm/timing looseness (informal, recorded as such in `notes/phase1.md` §1.4). A rigorous benchmark would need ground-truth beat annotations for the test songs — meaningful effort spent measuring data no feature reads.
+
+**Revisit trigger (recorded, not vague):** build the benchmark — and only then, conditionally, `dsp_core` — if and when a rhythm-consuming feature lands together with the pitch-serving endpoint (the same prerequisite pair 6.4 recorded for melody-target comparison). Until a feature *reads* tempo/beat data, its quality is unmeasurable in any way that matters.
+
+**Verdict:** Phase 6.5 done via the skip branch — **PHASE 6 COMPLETE**, and with it every unconditional item in the §10 build plan. Project-wide remaining: 2.6 chunked-timing validation (still quota-gated on the g4dn 0→1 case).
