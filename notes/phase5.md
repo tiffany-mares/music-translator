@@ -91,3 +91,38 @@ PASS - Phase 5.3 done-when met.
 (All items trap-cleaned. The script's `[[ "$NEXT" > "$NOW" ]]` string comparison is sound ONLY because of the fixed-width truncation above.)
 
 **Verdict:** Phase 5.3 done — both /vocab endpoints live against DynamoDB; a review event updates `nextReviewAt` and `/vocab/due` reflects it immediately. Next: 5.4 — quiz generation from processed lyrics.
+
+## 5.4 — Quiz generation
+
+**Date:** 2026-07-31
+**Spec situation:** the §10 one-liner was the entire spec — no endpoint, no quiz format, no vocab→song link existed anywhere. This phase defined the contract. The spec's §5.4 storage note anticipated exactly the fallback used here ("find songs containing vocab word X" — no index added yet at M0 scale; future work: `lines.words.text` index + exact-match pushdown, noting whisper word text carries punctuation/casing so `Filters.eq` would be unreliable anyway).
+
+**Contract (new `GET /vocab/quiz`, JWT):** cloze questions from the user's DUE items (reuses `queryDue`, most-overdue first, cap `MAX_QUESTIONS=20`). Question: `{vocabId, term, definition, hasContext, songId, lineNumber, prompt, translation}` — the four context fields are **explicit JSON nulls** when `hasContext:false` (Gson `addProperty` with null stores `JsonNull`; stable shape for 5.5, which can still quiz on term/definition). Blank token `____`; **every** occurrence in the line is blanked (a single blank would leak the answer elsewhere in the line — pinned by the "Inima, inima" test).
+
+**Vocab→song link:** `POST /vocab/review` body gained optional `songId`, persisted write-when-non-null / preserved-on-update like term/definition; GSI2 projects ALL so it propagates into `/vocab/due` (which now emits `songId`, null-explicit) and the quiz with zero index changes.
+
+**Matching rules (Cloze.java, unit-pinned):** case-insensitive whole-word via `CASE_INSENSITIVE|UNICODE_CASE` with letter/digit lookarounds `(?<![\p{L}\p{N}]) … (?![\p{L}\p{N}])` — NOT `\b`, which treats ă/ș/ț as non-word. **No diacritic folding** ("inima" ≠ "inimă"): terms come from lyrics verbatim via 5.5. Accepted caveat: legacy cedilla Ş (U+015E) doesn't case-fold to comma-below Ș (U+0218). Term is `Pattern.quote`d (regex metacharacters literal).
+
+**Prefilter/matcher split (load-bearing):** the Mongo query is only a case-insensitive SUBSTRING regex prefilter on `lines.originalText` (escaped to a PCRE literal, limit 5 docs) — word-boundary semantics live exclusively in Java because server-side PCRE `\b` is not Unicode-aware. The prefilter can false-positive ("in" ⊂ "inima" — pinned test proves the word-matcher rejects it) but cannot false-negative. Resolution order: linked songId doc → cross-song fallback → `hasContext:false`.
+
+**Architecture/deps:** `LyricsRepository` seam (`findBySongId`, `findByTermSubstring` → raw `SongLyrics/LyricLine` records) + `QuizService` separate from `VocabService` so the SM-2 path never grows a Mongo dependency. `MongoLyricsRepository`: Document API only (no POJO codecs = no reflection, shade-safe), **lazy** client (first quiz call — review/due cold starts unchanged), secret via `MONGODB_SECRET_ARN` → Secrets Manager (SDK v2 `secretsmanager` artifact, url-connection), same knobs as the python api Lambda (5s selection/connect, pool 5). Driver `mongodb-driver-sync:5.1.4`; shade gained `ServicesResourceTransformer` (driver SPI descriptors; deterministic, reproducible-hash preserved). Logging: no slf4j shipped → driver falls back to JUL (contingency if `NoClassDefFoundError: org/slf4j/...` ever appears: add slf4j-api + slf4j-nop). Jar 7.6→11.2MB.
+
+**Terraform (applied 2026-07-31, exactly `1 to add, 2 to change, 0 to destroy`):** route `GET /vocab/quiz`; learning policy + `ReadMongoSecretOnly` (copy of the api pattern, `lyralearn/mongodb-*`); learning function: jar hash, `timeout 10→15` (cold quiz = JVM start + secret fetch + Atlas SRV/TLS + query stacked — 10s was sized for DynamoDB-only), `environment { MONGODB_SECRET_ARN }`.
+
+**Suite:** 51 in-container (15 SM-2 + 30 handler + 6 Cloze; the plan estimated 50 — it listed 11 quiz tests as "10"), `Tests run: 51, Failures: 0`.
+
+**Done-when gate (`scripts/verify_5_4.sh`, run 2026-07-31, first-try PASS):** extracts a real word + line from `test-song-001` via an independent pymongo read, seeds a linked past-due item, and byte-compares the quiz output:
+```
+context source: term='iatit' from test-song-001
+quiz: 200
+OK   hasContext true / songId matches / lineNumber matches Atlas line
+OK   prompt contains ____ / prompt == real line with term blanked / not the unblanked original
+OK   translation == real line translation
+OK   nonsense term (zzzqqx): hasContext false, prompt null
+review songId: persisted on create
+no token: 401 OK
+PASS - Phase 5.4 done-when met.
+```
+(Term `iatit` is a whisper transcription artifact in the test song — but that's the point: it's REAL processed-lyrics context, not placeholder text. Warm quiz calls returned well inside the old 10s budget; the 15s timeout is cold-start insurance.)
+
+**Verdict:** Phase 5.4 done — quiz questions reference real lyric context from an actual processed song. Next: 5.5 — frontend integration (vocab review UI + due-today list wired into the Phase 4 player; done-when: full loop — play a song, encounter vocab, review it later, see it scheduled correctly).
