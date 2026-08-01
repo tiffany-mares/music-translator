@@ -122,6 +122,16 @@ export async function reviewVocab(token: string, req: ReviewRequest): Promise<Re
   return body as ReviewResult
 }
 
+// The user's whole collection (every saved word, soonest next-review first).
+export async function getAllVocab(token: string): Promise<DueVocabResponse> {
+  const res = await fetch(`${BASE}/vocab`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const body = await parseJson(res)
+  if (!res.ok) throw new ApiError(res.status, body)
+  return body as DueVocabResponse
+}
+
 export async function getDueVocab(token: string): Promise<DueVocabResponse> {
   const res = await fetch(`${BASE}/vocab/due`, {
     headers: { Authorization: `Bearer ${token}` },
