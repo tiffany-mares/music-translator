@@ -1,0 +1,18 @@
+# Normalize all text to LF in the repo AND the working tree (eol=lf overrides
+# core.autocrlf). Load-bearing beyond tidiness: terraform's archive_file hashes
+# lambda/api/ source bytes, so CRLF churn from Windows checkouts produced
+# phantom "1 to change" plans (observed 2026-08-01 audit).
+* text=auto eol=lf
+
+# Binaries — never touch line endings.
+*.mp3 binary
+*.wav binary
+*.mid binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.jar binary
+*.zip binary
+*.so binary
+# CREPE weight shards are extensionless binary files.
+frontend/public/models/crepe/group* binary

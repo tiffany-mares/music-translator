@@ -8,6 +8,12 @@
       "Resource": "arn:aws:s3:::__BUCKET__/songs/*"
     },
     {
+      "Sid": "TagRawForLifecycle",
+      "Effect": "Allow",
+      "Action": "s3:PutObjectTagging",
+      "Resource": "arn:aws:s3:::__BUCKET__/songs/*"
+    },
+    {
       "Sid": "ListSongsPrefixOnly",
       "Effect": "Allow",
       "Action": "s3:ListBucket",

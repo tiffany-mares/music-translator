@@ -5,6 +5,60 @@ resource "aws_s3_bucket" "audio" {
   bucket = var.audio_bucket
 }
 
+# Spec §3: versioned. Overwrites/deletes keep noncurrent versions; the
+# lifecycle rule below expires those after 30 days so versioning can't grow
+# storage unboundedly.
+resource "aws_s3_bucket_versioning" "audio" {
+  bucket = aws_s3_bucket.audio.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Spec §3/§5.4/§9: SSE-S3. AWS has defaulted new buckets to AES256 since
+# Jan 2023, but the spec calls it out explicitly — configure it rather than
+# rely on the default.
+resource "aws_s3_bucket_server_side_encryption_configuration" "audio" {
+  bucket = aws_s3_bucket.audio.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Spec §5.4: raw/ -> Standard-IA after 30 days (stems/pitch stay Standard —
+# they're read on every playback). Keys are songs/{songId}/raw/... so no
+# prefix can select raw/ across songs; the validate Lambda tags each raw
+# object tier=raw at /process time and the rule filters on that tag.
+resource "aws_s3_bucket_lifecycle_configuration" "audio" {
+  bucket = aws_s3_bucket.audio.id
+
+  rule {
+    id     = "raw-to-ia"
+    status = "Enabled"
+    filter {
+      tag {
+        key   = "tier"
+        value = "raw"
+      }
+    }
+    transition {
+      days          = 30
+      storage_class = "STANDARD_IA"
+    }
+  }
+
+  rule {
+    id     = "expire-noncurrent"
+    status = "Enabled"
+    filter {} # whole bucket
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+}
+
 # Browsers preflight the presigned PUT (curl never did, which is why phases
 # 3.x passed without this). Without CORS the OPTIONS returns 403 and no
 # browser upload can succeed.
