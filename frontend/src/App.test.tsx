@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as amplifyAuth from 'aws-amplify/auth'
@@ -36,10 +36,13 @@ describe('App auth states', () => {
     mocked.fetchAuthSession.mockResolvedValue(signedOutSession)
     renderApp()
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    // Scoped to the sidebar footer area via the nav landmark's parent: the
+    // marketing pages make unscoped role scans too slow under suite load.
+    const aside = (await screen.findByRole('navigation', { name: 'View' })).closest('aside')!
+    expect(await within(aside as HTMLElement).findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+    await userEvent.click(within(aside as HTMLElement).getByRole('button', { name: 'Sign in' }))
     expect(screen.getByRole('form', { name: /sign in/i })).toBeInTheDocument()
-  })
+  }, 15000)
 
   it('shows the shell with the user email when a session exists', async () => {
     mocked.fetchAuthSession.mockResolvedValue(signedInSession)

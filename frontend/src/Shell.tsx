@@ -44,7 +44,7 @@ export default function Shell() {
           <Landing onNavigate={setView} />
         </div>
         <div hidden={view !== 'how'}>
-          <HowItWorks />
+          <HowItWorks onNavigate={setView} />
         </div>
         <div hidden={view !== 'library'}>
           <LibraryView onNavigate={setView} />

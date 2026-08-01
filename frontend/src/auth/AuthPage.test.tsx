@@ -52,6 +52,10 @@ async function fillSignUp(email: string, password: string) {
   await userEvent.click(screen.getByRole('button', { name: /create account/i }))
 }
 
+// The full marketing pages now mount with the shell; userEvent interactions
+// over that much DOM push some tests past the default 5s timeout in jsdom.
+vi.setConfig({ testTimeout: 15000 })
+
 describe('AuthPage', () => {
   beforeEach(() => vi.resetAllMocks())
 

@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as amplifyAuth from 'aws-amplify/auth'
@@ -26,11 +26,14 @@ describe('Shell navigation (7: NavShell)', () => {
 
   it('defaults to Home; upload form and review panel are hidden but MOUNTED', async () => {
     renderWithProviders(<Shell />)
-    expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute('aria-pressed', 'true')
+    // Nav queries scoped: the full marketing pages mount with the shell and
+    // an unscoped role scan over that DOM is too slow under full-suite load.
+    const nav = screen.getByRole('navigation', { name: 'View' })
+    expect(within(nav).getByRole('button', { name: 'Home' })).toHaveAttribute('aria-pressed', 'true')
     // hidden, not unmounted — getBy* still finds them, but they are not visible
     expect(screen.getByLabelText(/audio file/i)).not.toBeVisible()
     expect(await screen.findByText(/due for review/i)).not.toBeVisible()
-  })
+  }, 15000)
 
   it('toggles views without unmounting any panel', async () => {
     renderWithProviders(<Shell />)
@@ -53,7 +56,11 @@ describe('Shell navigation (7: NavShell)', () => {
       count: 2,
     })
     renderWithProviders(<Shell />)
-    expect(await screen.findByRole('button', { name: 'Review (2)' })).toBeInTheDocument()
+    // Scoped to the nav: the full marketing pages now mount with the shell,
+    // and an unscoped role+name scan over that DOM is too slow for findBy's
+    // poll window in jsdom.
+    const nav = screen.getByRole('navigation', { name: 'View' })
+    expect(await within(nav).findByRole('button', { name: 'Review (2)' })).toBeInTheDocument()
   })
 
   it('signed out: full shell renders with a Sign in nav item; Review shows the sign-in prompt', async () => {

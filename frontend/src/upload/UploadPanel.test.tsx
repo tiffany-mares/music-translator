@@ -186,7 +186,7 @@ describe('UploadPanel', () => {
       .mockResolvedValueOnce({ kind: 'started', songId: 's6', format: 'mp3', jobId: 's6.bbbb' })
     // Key on jobId: three deduped observers share one fetch per key — order-based
     // mockResolvedValueOnce chains would be fragile here.
-    mockedApi.getJob.mockImplementation(async (_t: string, jobId: string) =>
+    mockedApi.getJob.mockImplementation(async (_t: string | null, jobId: string) =>
       jobId === 's6.aaaa'
         ? ({ jobId, songId: 's6', status: 'FAILED', error: 'boom' } as Job)
         : ({ jobId, songId: 's6', status: 'QUEUED' } as Job),
