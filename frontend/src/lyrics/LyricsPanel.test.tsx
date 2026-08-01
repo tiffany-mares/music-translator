@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { LyricsLine } from '../api/types'
 import LyricsPanel from './LyricsPanel'
@@ -65,5 +66,50 @@ describe('LyricsPanel', () => {
     // Word change within the same line must NOT re-scroll.
     rerender(<LyricsPanel lines={LINES} active={{ lineIndex: 0, wordIndex: 1 }} />)
     expect(spy).not.toHaveBeenCalled()
+  })
+})
+
+describe('LyricsPanel word clicks (5.5)', () => {
+  const CLICK_LINES: LyricsLine[] = [
+    {
+      lineNumber: 1,
+      originalText: 'Salut — mondo,',
+      translatedText: 'Hello world',
+      startTime: 1,
+      endTime: 2,
+      words: [
+        { text: 'Salut', start: 1, end: 1.3 },
+        { text: '—', start: 1.3, end: 1.5 },
+        { text: 'mondo,', start: 1.5, end: 2 },
+      ],
+    },
+  ]
+
+  it('renders saveable words as buttons and reports (lineIndex, wordIndex) on click', async () => {
+    const onWordClick = vi.fn()
+    render(<LyricsPanel lines={CLICK_LINES} active={null} onWordClick={onWordClick} />)
+    const mondo = screen.getByText('mondo,')
+    expect(mondo.tagName).toBe('BUTTON')
+    expect(mondo).toHaveAttribute('data-start', '1.5')
+    await userEvent.click(mondo)
+    expect(onWordClick).toHaveBeenCalledWith(0, 2)
+  })
+
+  it('punctuation-only tokens stay non-clickable spans', () => {
+    render(<LyricsPanel lines={CLICK_LINES} active={null} onWordClick={vi.fn()} />)
+    expect(screen.getByText('—').tagName).toBe('SPAN')
+  })
+
+  it('marks words whose vocabId is in savedVocabIds (case/punctuation-insensitive)', () => {
+    render(
+      <LyricsPanel
+        lines={CLICK_LINES}
+        active={null}
+        onWordClick={vi.fn()}
+        savedVocabIds={new Set(['mondo'])}
+      />,
+    )
+    expect(screen.getByText('mondo,')).toHaveClass('word-saved')
+    expect(screen.getByText('Salut')).not.toHaveClass('word-saved')
   })
 })
