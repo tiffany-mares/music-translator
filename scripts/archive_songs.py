@@ -34,10 +34,17 @@ def archive(ddb, table: str, song_ids: list[str], restore: bool = False) -> tupl
                     TableName=table, Key=key,
                     # Idempotence: never double-archive (it would overwrite
                     # previousStatus with ARCHIVED and lose the original).
-                    ConditionExpression="attribute_exists(PK) AND #s <> :archived",
-                    UpdateExpression="SET previousStatus = #s, #s = :archived",
+                    # Malformed shells may lack status entirely - archive those
+                    # too, recording UNKNOWN as the previous value.
+                    ConditionExpression=(
+                        "attribute_exists(PK) AND "
+                        "(attribute_not_exists(#s) OR #s <> :archived)"),
+                    UpdateExpression=(
+                        "SET previousStatus = if_not_exists(#s, :unknown), "
+                        "#s = :archived"),
                     ExpressionAttributeNames={"#s": "status"},
-                    ExpressionAttributeValues={":archived": {"S": "ARCHIVED"}})
+                    ExpressionAttributeValues={":archived": {"S": "ARCHIVED"},
+                                               ":unknown": {"S": "UNKNOWN"}})
                 print(f"archived {song_id}")
             done += 1
         except ddb.exceptions.ConditionalCheckFailedException:

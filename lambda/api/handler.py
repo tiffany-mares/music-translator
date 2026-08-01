@@ -197,7 +197,9 @@ def get_songs(event, claims):
         "status": it.get("status", {}).get("S", ""),
         "createdAt": it.get("createdAt", {}).get("S", ""),
         "sourceLanguage": it["sourceLanguage"]["S"] if "sourceLanguage" in it else None,
-    } for it in items if it.get("status", {}).get("S") not in CATALOG_HIDDEN_STATUSES]
+    } for it in items
+        if it.get("status", {}).get("S") not in CATALOG_HIDDEN_STATUSES
+        and "status" in it]  # status-less shells are malformed, never listable
     songs.sort(key=lambda s: s["createdAt"], reverse=True)
     return _resp(200, {"songs": songs})
 
