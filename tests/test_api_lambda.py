@@ -24,6 +24,10 @@ class FakeDdb:
         k = (Key["PK"]["S"], Key["SK"]["S"])
         return {"Item": self.items[k]} if k in self.items else {}
 
+    # Base fake: first anonymous upload of the day (quota counter at 1).
+    def update_item(self, **kwargs):
+        return {"Attributes": {"uploads": {"N": "1"}}}
+
 
 class FakeS3:
     class exceptions:
@@ -243,3 +247,122 @@ def test_post_songs_anonymous_upload_records_anonymous_uploader(monkeypatch):
     item = ddb.put_calls[0]
     assert item["uploadedBy"]["S"] == "anonymous"
     assert item["GSI1PK"]["S"] == "USER#anonymous"
+
+
+# --- Phase 7 follow-ups: ARCHIVED catalog status + anonymous per-IP quota ----
+
+def test_get_songs_hides_archived(monkeypatch):
+    ddb = ScanningFakeDdb([
+        _meta_item("keep", "VALIDATED", "2026-07-01T00:00:00+00:00"),
+        _meta_item("gone", "ARCHIVED", "2026-07-02T00:00:00+00:00"),
+    ])
+    _wire(monkeypatch, ddb=ddb)
+    resp = api.handler({"routeKey": "GET /songs", "requestContext": {}}, None)
+    songs = json.loads(resp["body"])["songs"]
+    assert [s["songId"] for s in songs] == ["keep"]
+
+
+class QuotaFakeDdb(FakeDdb):
+    def __init__(self, counts=None):
+        super().__init__()
+        self.counts = counts or {}
+        self.update_calls = []
+
+    def update_item(self, **kwargs):
+        self.update_calls.append(kwargs)
+        key = kwargs["Key"]["PK"]["S"]
+        self.counts[key] = self.counts.get(key, 0) + 1
+        return {"Attributes": {"uploads": {"N": str(self.counts[key])}}}
+
+
+def _anon_event(body=None, ip="203.0.113.9"):
+    return {"routeKey": "POST /songs",
+            "requestContext": {"http": {"sourceIp": ip}},
+            "body": json.dumps(body or {})}
+
+
+def test_anonymous_upload_counts_against_a_per_ip_daily_quota(monkeypatch):
+    ddb = QuotaFakeDdb()
+    _wire(monkeypatch, ddb=ddb)
+    resp = api.handler(_anon_event({"title": "ok"}), None)
+    assert resp["statusCode"] == 201
+    rate = ddb.update_calls[0]
+    assert rate["Key"]["PK"]["S"] == "RATE#203.0.113.9"
+    assert rate["Key"]["SK"]["S"].startswith("DAY#")
+    assert "expiresAt" in rate["UpdateExpression"] or ":ttl" in str(rate["ExpressionAttributeValues"])
+
+
+def test_anonymous_upload_over_quota_gets_429_and_writes_no_song(monkeypatch):
+    ddb = QuotaFakeDdb(counts={"RATE#203.0.113.9": api.ANON_DAILY_UPLOAD_LIMIT})
+    _wire(monkeypatch, ddb=ddb)
+    resp = api.handler(_anon_event({"title": "too many"}), None)
+    assert resp["statusCode"] == 429
+    assert "limit" in json.loads(resp["body"])["error"].lower()
+    assert ddb.put_calls == []  # no song shell created
+
+
+def test_signed_in_upload_bypasses_the_ip_quota(monkeypatch):
+    ddb = QuotaFakeDdb(counts={"RATE#203.0.113.9": 99})
+    _wire(monkeypatch, ddb=ddb)
+    ev = _event("POST /songs", body={"title": "mine"})
+    ev["requestContext"]["http"] = {"sourceIp": "203.0.113.9"}
+    resp = api.handler(ev, None)
+    assert resp["statusCode"] == 201
+    assert ddb.update_calls == []  # quota counter untouched for signed-in users
+
+
+# --- archive_songs.py (soft-archive script) ----------------------------------
+
+import importlib.util as _ilu2
+from pathlib import Path as _Path2
+
+_AR_SPEC = _ilu2.spec_from_file_location(
+    "archive_songs", _Path2(__file__).resolve().parents[1] / "scripts" / "archive_songs.py")
+archive_mod = _ilu2.module_from_spec(_AR_SPEC)
+_AR_SPEC.loader.exec_module(archive_mod)
+
+
+class ArchiveFakeDdb:
+    class exceptions:
+        class ConditionalCheckFailedException(Exception):
+            pass
+
+    def __init__(self, items):
+        self.items = items  # songId -> status
+
+    def get_item(self, TableName, Key):
+        sid = Key["PK"]["S"].removeprefix("SONG#")
+        if sid not in self.items:
+            return {}
+        item = {"status": {"S": self.items[sid]["status"]}}
+        if "previousStatus" in self.items[sid]:
+            item["previousStatus"] = {"S": self.items[sid]["previousStatus"]}
+        return {"Item": item}
+
+    def update_item(self, TableName, Key, ConditionExpression, UpdateExpression,
+                    ExpressionAttributeNames, ExpressionAttributeValues):
+        sid = Key["PK"]["S"].removeprefix("SONG#")
+        if sid not in self.items:
+            raise self.exceptions.ConditionalCheckFailedException()
+        if ":archived" in ExpressionAttributeValues:
+            if self.items[sid]["status"] == "ARCHIVED":
+                raise self.exceptions.ConditionalCheckFailedException()
+            self.items[sid] = {"status": "ARCHIVED", "previousStatus": self.items[sid]["status"]}
+        else:
+            self.items[sid] = {"status": ExpressionAttributeValues[":prev"]["S"]}
+        return {}
+
+
+def test_archive_sets_archived_and_is_idempotent_and_restorable():
+    ddb = ArchiveFakeDdb({"junk": {"status": "VALIDATED"}, "ghost-was-never-here": None or {}})
+    del ddb.items["ghost-was-never-here"]
+    done, skipped = archive_mod.archive(ddb, "T", ["junk", "missing"])
+    assert (done, skipped) == (1, 1)
+    assert ddb.items["junk"] == {"status": "ARCHIVED", "previousStatus": "VALIDATED"}
+    # second archive run is a no-op skip (previousStatus survives)
+    done, skipped = archive_mod.archive(ddb, "T", ["junk"])
+    assert (done, skipped) == (0, 1)
+    # restore puts the original status back
+    done, skipped = archive_mod.archive(ddb, "T", ["junk"], restore=True)
+    assert (done, skipped) == (1, 0)
+    assert ddb.items["junk"]["status"] == "VALIDATED"

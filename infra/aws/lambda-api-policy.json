@@ -4,7 +4,7 @@
     {
       "Sid": "SongItems",
       "Effect": "Allow",
-      "Action": ["dynamodb:GetItem", "dynamodb:PutItem"],
+      "Action": ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"],
       "Resource": "arn:aws:dynamodb:__REGION__:__ACCOUNT_ID__:table/LyraLearnTable"
     },
     {

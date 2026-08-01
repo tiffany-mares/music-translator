@@ -84,6 +84,13 @@ resource "aws_dynamodb_table" "main" {
   stream_enabled   = true
   stream_view_type = "NEW_IMAGE"
 
+  # Phase 7 follow-up: anonymous-upload RATE# counter items carry expiresAt
+  # so per-IP quota rows self-clean after their day passes.
+  ttl {
+    attribute_name = "expiresAt"
+    enabled        = true
+  }
+
   dynamic "attribute" {
     for_each = toset(["PK", "SK", "GSI1PK", "GSI1SK", "GSI2PK", "GSI2SK", "GSI3PK"])
     content {
