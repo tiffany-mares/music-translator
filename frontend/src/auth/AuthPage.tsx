@@ -4,9 +4,9 @@ import heroUrl from '../assets/cadenza-hero-watercolor.png'
 import { Button } from '@/components/ui/button'
 import {
   GlassCard,
-  GlassCardAction,
   GlassCardContent,
   GlassCardDescription,
+  GlassCardFooter,
   GlassCardHeader,
   GlassCardTitle,
 } from '@/components/ui/glass-card'
@@ -140,11 +140,6 @@ export default function AuthPage() {
                 <GlassCardDescription className="text-white/70">
                   Your saved words and review queue live here.
                 </GlassCardDescription>
-                <GlassCardAction>
-                  <Button variant="link" className="text-brass" onClick={() => switchMode('signUp')}>
-                    Need an account? Sign up
-                  </Button>
-                </GlassCardAction>
               </GlassCardHeader>
               <GlassCardContent>
                 {banners}
@@ -184,6 +179,11 @@ export default function AuthPage() {
                   </Button>
                 </form>
               </GlassCardContent>
+              <GlassCardFooter className="justify-center border-t border-white/15 pt-5">
+                <Button variant="link" className="text-brass" onClick={() => switchMode('signUp')}>
+                  Need an account? Sign up
+                </Button>
+              </GlassCardFooter>
             </>
           )}
 
@@ -194,11 +194,6 @@ export default function AuthPage() {
                 <GlassCardDescription className="text-white/70">
                   Free — it syncs your vocabulary across devices.
                 </GlassCardDescription>
-                <GlassCardAction>
-                  <Button variant="link" className="text-brass" onClick={() => switchMode('signIn')}>
-                    Already have an account? Sign in
-                  </Button>
-                </GlassCardAction>
               </GlassCardHeader>
               <GlassCardContent>
                 {banners}
@@ -224,6 +219,11 @@ export default function AuthPage() {
                   </Button>
                 </form>
               </GlassCardContent>
+              <GlassCardFooter className="justify-center border-t border-white/15 pt-5">
+                <Button variant="link" className="text-brass" onClick={() => switchMode('signIn')}>
+                  Already have an account? Sign in
+                </Button>
+              </GlassCardFooter>
             </>
           )}
 
