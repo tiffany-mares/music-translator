@@ -149,6 +149,7 @@ export default function AuthPage() {
                     <Input
                       id="auth-email"
                       type="email"
+                      placeholder="you@learner.music"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
@@ -203,6 +204,7 @@ export default function AuthPage() {
                     <Input
                       id="auth-email"
                       type="email"
+                      placeholder="you@learner.music"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required

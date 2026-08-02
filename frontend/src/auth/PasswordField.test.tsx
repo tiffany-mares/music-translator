@@ -23,6 +23,14 @@ describe('PasswordField', () => {
     expect(screen.getByLabelText(/password/i, { selector: 'input' })).toHaveAttribute('type', 'password')
   })
 
+  it('shows the eight-dot placeholder before the user types', () => {
+    render(<PasswordField value="" onChange={vi.fn()} autoComplete="current-password" />)
+    expect(screen.getByLabelText(/password/i, { selector: 'input' })).toHaveAttribute(
+      'placeholder',
+      '••••••••',
+    )
+  })
+
   it('typing still reaches onChange and the toggle never submits the form', async () => {
     const onChange = vi.fn()
     const onSubmit = vi.fn((e: { preventDefault(): void }) => e.preventDefault())

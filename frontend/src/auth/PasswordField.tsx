@@ -29,6 +29,7 @@ export default function PasswordField({
         <Input
           id={id}
           className="pr-11"
+          placeholder="••••••••"
           type={visible ? 'text' : 'password'}
           value={value}
           onChange={(e) => onChange(e.target.value)}
