@@ -125,7 +125,7 @@ export default function NavShell({
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="relative z-10 flex items-center justify-between px-5 py-5">
+        <div className="relative z-10 flex items-center justify-between px-5 py-3">
           <Brand onClick={() => go('home')} />
           <button
             type="button"
@@ -139,9 +139,9 @@ export default function NavShell({
 
         <nav
           aria-label="View"
-          className="relative z-10 flex flex-1 flex-col gap-1 overflow-y-auto px-3"
+          className="relative z-10 flex flex-1 flex-col gap-0.5 overflow-y-auto px-3"
         >
-          <p className="label-mono px-2 pb-2 pt-1 text-ink-foreground/40">[ NAVIGATE ]</p>
+          <p className="label-mono px-2 pb-1 text-ink-foreground/40">[ NAVIGATE ]</p>
           <NavButton label="Home" active={view === 'home'} onClick={() => go('home')} />
           <NavButton label="Inspiration" active={false} onClick={() => goToSection('inspiration')} />
           <NavButton label="Pipeline" active={false} onClick={() => goToSection('pipeline')} />
@@ -155,38 +155,42 @@ export default function NavShell({
           />
           <NavButton label="Stack" active={view === 'stack'} onClick={() => go('stack')} />
 
-          <span className="my-3 h-px w-full bg-border/60" />
+          <span className="my-2 h-px w-full bg-border/60" />
 
-          <p className="label-mono px-2 pb-2 text-ink-foreground/40">[ ELSEWHERE ]</p>
-          <a
-            href="https://tiffanymares.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-button rounded-md px-2 py-2 text-ink-foreground/60 transition-colors hover:bg-ink-foreground/5 hover:text-brass"
-          >
-            Contact
-          </a>
-          <a
-            href="https://github.com/tiffany-mares/music-translator/tree/main"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-button flex items-center gap-2 rounded-md px-2 py-2 text-ink-foreground/60 transition-colors hover:bg-ink-foreground/5 hover:text-brass"
-          >
-            <GithubIcon className="h-4 w-4 shrink-0" />
-            GitHub
-          </a>
-          <a
-            href="https://www.linkedin.com/in/tiffanymares/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-button flex items-center gap-2 rounded-md px-2 py-2 text-ink-foreground/60 transition-colors hover:bg-ink-foreground/5 hover:text-brass"
-          >
-            <LinkedinIcon className="h-4 w-4 shrink-0" />
-            LinkedIn
-          </a>
+          <p className="label-mono px-2 pb-1 text-ink-foreground/40">[ ELSEWHERE ]</p>
+          <div className="flex items-center gap-1 px-1">
+            <a
+              href="https://tiffanymares.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-button rounded-md px-2 py-1.5 text-ink-foreground/60 transition-colors hover:bg-ink-foreground/5 hover:text-brass"
+            >
+              Contact
+            </a>
+            <a
+              href="https://github.com/tiffany-mares/music-translator/tree/main"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="GitHub"
+              title="GitHub"
+              className="rounded-md p-1.5 text-ink-foreground/60 transition-colors hover:bg-ink-foreground/5 hover:text-brass"
+            >
+              <GithubIcon className="h-4 w-4" />
+            </a>
+            <a
+              href="https://www.linkedin.com/in/tiffanymares/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="LinkedIn"
+              title="LinkedIn"
+              className="rounded-md p-1.5 text-ink-foreground/60 transition-colors hover:bg-ink-foreground/5 hover:text-brass"
+            >
+              <LinkedinIcon className="h-4 w-4" />
+            </a>
+          </div>
         </nav>
 
-        <div className="relative z-10 border-t border-border/60 px-3 py-4">
+        <div className="relative z-10 border-t border-border/60 px-3 py-3">
           {/* sign in/out live on the Profile page now */}
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
@@ -233,7 +237,7 @@ function NavButton({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`font-button relative flex items-center gap-1.5 rounded-md px-2 py-2 text-left transition-colors before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:bg-brass before:transition-transform before:duration-300 hover:bg-ink-foreground/5 hover:text-ink-foreground ${
+      className={`font-button relative flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:bg-brass before:transition-transform before:duration-300 hover:bg-ink-foreground/5 hover:text-ink-foreground ${
         active
           ? 'bg-ink-foreground/5 text-brass before:scale-y-100'
           : 'text-ink-foreground/60 before:scale-y-0'
