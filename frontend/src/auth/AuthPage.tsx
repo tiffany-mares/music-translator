@@ -147,10 +147,10 @@ export default function AuthPage() {
           {mode === 'signIn' && (
             <>
               <GlassCardHeader>
-                <GlassCardTitle>Sign in to your account</GlassCardTitle>
-                <GlassCardDescription className="text-white/70">
-                  Your saved words and review queue live here.
+                <GlassCardDescription className="label-mono text-brass">
+                  [ RETURNING LEARNER ]
                 </GlassCardDescription>
+                <GlassCardTitle className="font-content text-2xl">Welcome back.</GlassCardTitle>
               </GlassCardHeader>
               <GlassCardContent>
                 {banners}
@@ -202,10 +202,10 @@ export default function AuthPage() {
           {mode === 'signUp' && (
             <>
               <GlassCardHeader>
-                <GlassCardTitle>Create your account</GlassCardTitle>
-                <GlassCardDescription className="text-white/70">
-                  Free — it syncs your vocabulary across devices.
+                <GlassCardDescription className="label-mono text-brass">
+                  [ NEW LEARNER ]
                 </GlassCardDescription>
+                <GlassCardTitle className="font-content text-2xl">Create your account</GlassCardTitle>
               </GlassCardHeader>
               <GlassCardContent>
                 {banners}
