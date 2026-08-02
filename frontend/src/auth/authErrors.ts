@@ -6,7 +6,7 @@ const MESSAGES: Record<string, string> = {
   UserNotConfirmedException: "This account isn't confirmed yet — check your email for a code.",
   UsernameExistsException: 'An account with this email already exists — sign in instead.',
   InvalidPasswordException:
-    'Password must be at least 12 characters with an uppercase letter, a lowercase letter, and a number.',
+    'Password must be at least 8 characters with an uppercase letter, a lowercase letter, and a number.',
   CodeMismatchException: "That code doesn't match — check the email and try again.",
   ExpiredCodeException: 'That code has expired — request a new one.',
   LimitExceededException: 'Too many attempts — wait a few minutes and try again.',
