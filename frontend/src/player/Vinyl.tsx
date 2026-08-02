@@ -3,12 +3,15 @@
 // dial (angle -> fraction of the track).
 export default function Vinyl({
   spinning = false,
+  fast = false,
   size = 280,
   className = '',
   progress = 0,
   onSeek,
 }: {
   spinning?: boolean
+  /** Prominent upload-wait mode: quicker rotation. */
+  fast?: boolean
   size?: number
   className?: string
   progress?: number
@@ -46,7 +49,7 @@ export default function Vinyl({
         />
       </svg>
       <div
-        className={`absolute inset-[7%] rounded-full ${spinning ? 'vinyl-spin' : ''}`}
+        className={`absolute inset-[7%] rounded-full ${spinning ? (fast ? 'vinyl-spin-fast' : 'vinyl-spin') : ''}`}
         style={{
           background:
             'repeating-radial-gradient(circle at center, oklch(0.16 0.02 260) 0 3px, oklch(0.22 0.025 262) 3px 5px)',

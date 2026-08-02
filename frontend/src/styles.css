@@ -131,15 +131,11 @@
   input[type="submit"]:hover,
   input[type="button"]:hover,
   .cursor-pointer:hover {
-    filter: brightness(1.35) saturate(1.25) drop-shadow(0 0 34px color-mix(in oklab, var(--brass) 80%, transparent));
-    transform: translateY(-3px) scale(1.02);
-    text-shadow:
-      0 0 10px color-mix(in oklab, var(--brass) 90%, transparent),
-      0 0 32px color-mix(in oklab, var(--brass) 75%, transparent),
-      0 0 72px color-mix(in oklab, var(--brass) 55%, transparent);
-    box-shadow:
-      0 0 24px -2px color-mix(in oklab, var(--brass) 70%, transparent),
-      0 0 64px -8px color-mix(in oklab, var(--brass) 48%, transparent);
+    /* toned down 2026-08-02 (user: less aggressive) */
+    filter: brightness(1.12) saturate(1.08) drop-shadow(0 0 14px color-mix(in oklab, var(--brass) 45%, transparent));
+    transform: translateY(-2px) scale(1.01);
+    text-shadow: 0 0 8px color-mix(in oklab, var(--brass) 55%, transparent);
+    box-shadow: 0 0 16px -4px color-mix(in oklab, var(--brass) 40%, transparent);
   }
 
   a:active,
@@ -224,6 +220,26 @@
 
 @utility vinyl-spin {
   animation: spin-slow 8s linear infinite;
+}
+
+@utility vinyl-spin-fast {
+  animation: spin-slow 2.6s linear infinite;
+}
+
+/* pulsing brass halo behind the upload-wait disc */
+@keyframes disc-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 32px 4px color-mix(in oklab, var(--brass) 30%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 64px 14px color-mix(in oklab, var(--brass) 55%, transparent);
+  }
+}
+
+@utility disc-glow {
+  border-radius: 9999px;
+  animation: disc-glow 2.2s ease-in-out infinite;
 }
 
 @keyframes shimmer-sweep {
@@ -471,7 +487,9 @@
   .caret-blink,
   .hold-bob,
   .now-pulse,
-  .breathe {
+  .breathe,
+  .vinyl-spin-fast,
+  .disc-glow {
     animation: none;
   }
   .will-reveal {

@@ -93,14 +93,20 @@ def post_songs(event, claims):
     if user == "anonymous" and _anon_over_quota(event):
         return _resp(429, {"error": "Daily upload limit reached — sign in or try again tomorrow."})
     raw_key = f"songs/{song_id}/raw/input.mp3"
-    _ddb().put_item(TableName=TABLE, Item={
+    item = {
         "PK": {"S": f"SONG#{song_id}"}, "SK": {"S": "METADATA"},
         "title": {"S": body.get("title", "")}, "artist": {"S": body.get("artist", "")},
         "uploadedBy": {"S": user}, "status": {"S": "AWAITING_UPLOAD"},
         "createdAt": {"S": created},
         "GSI1PK": {"S": f"USER#{user}"}, "GSI1SK": {"S": created},
         "audioKeys": {"M": {"raw": {"S": raw_key}}},
-    })
+    }
+    # Upload-form language: the catalog can filter the song immediately; the
+    # translate lambda later overwrites it with Whisper's detected language.
+    lang = str(body.get("sourceLanguage", ""))[:10]
+    if lang:
+        item["sourceLanguage"] = {"S": lang}
+    _ddb().put_item(TableName=TABLE, Item=item)
     url = _s3().generate_presigned_url(
         "put_object", Params={"Bucket": BUCKET, "Key": raw_key}, ExpiresIn=URL_TTL_SECONDS)
     return _resp(201, {"songId": song_id, "uploadUrl": url})
