@@ -158,32 +158,36 @@ export default function NavShell({
           <span className="my-2 h-px w-full bg-border/60" />
 
           <p className="label-mono px-2 pb-1 text-ink-foreground/40">[ ELSEWHERE ]</p>
-          <a
-            href="https://tiffanymares.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-button rounded-md px-2 py-1.5 text-ink-foreground/60 transition-colors hover:bg-ink-foreground/5 hover:text-brass"
-          >
-            Contact
-          </a>
-          <a
-            href="https://github.com/tiffany-mares/music-translator/tree/main"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-button flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-foreground/60 transition-colors hover:bg-ink-foreground/5 hover:text-brass"
-          >
-            <GithubIcon className="h-4 w-4 shrink-0" />
-            GitHub
-          </a>
-          <a
-            href="https://www.linkedin.com/in/tiffanymares/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-button flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-foreground/60 transition-colors hover:bg-ink-foreground/5 hover:text-brass"
-          >
-            <LinkedinIcon className="h-4 w-4 shrink-0" />
-            LinkedIn
-          </a>
+          <div className="flex items-center gap-1 px-1">
+            <a
+              href="https://tiffanymares.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-button rounded-md px-2 py-1.5 text-ink-foreground/60 transition-colors hover:bg-ink-foreground/5 hover:text-brass"
+            >
+              Contact
+            </a>
+            <a
+              href="https://github.com/tiffany-mares/music-translator/tree/main"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="GitHub"
+              title="GitHub"
+              className="rounded-md p-1.5 text-ink-foreground/60 transition-colors hover:bg-ink-foreground/5 hover:text-brass"
+            >
+              <GithubIcon className="h-4 w-4" />
+            </a>
+            <a
+              href="https://www.linkedin.com/in/tiffanymares/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="LinkedIn"
+              title="LinkedIn"
+              className="rounded-md p-1.5 text-ink-foreground/60 transition-colors hover:bg-ink-foreground/5 hover:text-brass"
+            >
+              <LinkedinIcon className="h-4 w-4" />
+            </a>
+          </div>
         </nav>
 
         <div className="relative z-10 border-t border-border/60 px-3 py-3">
