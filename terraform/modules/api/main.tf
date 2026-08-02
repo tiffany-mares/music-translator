@@ -64,7 +64,7 @@ resource "aws_cognito_user_pool_client" "web" {
 
 variable "google_idp_enabled" {
   type    = bool
-  default = false
+  default = true # flipped 2026-08-01: the Google IdP was created out-of-band via CLI
 }
 
 # Hosted-UI domain: the OAuth code flow needs one; Google's authorized
