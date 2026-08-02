@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { Music, Upload } from 'lucide-react'
+import type { View } from '../nav/NavShell'
 import Player from '../player/Player'
 import Vinyl from '../player/Vinyl'
 import JobStatusLine from './JobStatusLine'
@@ -12,7 +13,7 @@ const pillCls =
 
 // Re-skin only (Phase 7): the REAL upload flow drives everything — no
 // simulated pipeline. Every test-asserted name/copy string is unchanged.
-export default function UploadPanel() {
+export default function UploadPanel({ onNavigate }: { onNavigate?: (view: View) => void } = {}) {
   const { state, start, retryProcess, reset } = useUploadFlow()
   // Same ['job', jobId] key as JobStatusLine + Player — RQ dedupes, zero extra requests.
   const { data: polledJob } = useJobPolling(state.step === 'polling' ? state.jobId : null)
@@ -28,14 +29,38 @@ export default function UploadPanel() {
   }
 
   if (state.step === 'polling') {
+    const failed = polledJob?.status === 'FAILED'
+    const done = polledJob?.status === 'COMPLETE'
     return (
       <div className={panelCls}>
-        <div className="flex items-center gap-4">
-          <Vinyl size={56} spinning={polledJob?.status !== 'FAILED'} />
-          <JobStatusLine jobId={state.jobId} />
-        </div>
+        {/* the loading centerpiece: a spinning disc while the pipeline runs */}
+        {!done && (
+          <div className="flex flex-col items-center gap-4 text-center">
+            <Vinyl size={160} spinning={!failed} />
+            <JobStatusLine jobId={state.jobId} />
+            {!failed && (
+              <>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  A brand-new song can take up to 30 minutes to fully process — you don&apos;t
+                  need to wait here. Playback below starts right away, and the song keeps
+                  loading while you explore.
+                </p>
+                {onNavigate && (
+                  <button
+                    type="button"
+                    className={pillCls}
+                    onClick={() => onNavigate('library')}
+                  >
+                    Explore the library in the meantime
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
+        {done && <JobStatusLine jobId={state.jobId} />}
         <Player songId={state.songId} jobId={state.jobId} />
-        {polledJob?.status === 'FAILED' && (
+        {failed && (
           <button type="button" className={pillCls} onClick={() => void retryProcess()}>
             Try again
           </button>

@@ -218,3 +218,37 @@ describe('UploadPanel', () => {
     expect(mockedApi.processSong).toHaveBeenCalledWith('tok', 'new1')
   })
 })
+
+// --- upload loading UX (spinning disc + explore-library escape hatch) --------
+
+describe('upload loading UX', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    mockedAuth.fetchAuthSession.mockResolvedValue(session)
+    mockedApi.getLyrics.mockResolvedValue({
+      songId: 's0', sourceLanguage: 'ro', targetLanguage: 'en', lines: [],
+    })
+  })
+
+  it('while processing: 30-minute note + Explore the library button navigating away', async () => {
+    mockedApi.createSong.mockResolvedValue({ songId: 'newsong12345', uploadUrl: 'https://s3/put' })
+    mockedApi.uploadFile.mockResolvedValue(undefined)
+    mockedApi.processSong.mockResolvedValue({
+      kind: 'started', songId: 'newsong12345', format: 'mp3', jobId: 'newsong12345.job1',
+    })
+    mockedApi.getJob.mockResolvedValue({
+      jobId: 'newsong12345.job1', songId: 'newsong12345', status: 'PROCESSING', stage: 'ChunkAudio',
+    })
+    mockedApi.getAudioUrls.mockResolvedValue({ urls: { raw: 'https://s3/raw?n' }, expiresInSeconds: 900 })
+    const onNavigate = vi.fn()
+    renderWithProviders(<UploadPanel onNavigate={onNavigate} />)
+    const form = screen.getByRole('form', { name: /upload a song/i })
+    const file = new File([new Uint8Array(60_000)], 'song.mp3', { type: 'audio/mpeg' })
+    const input = screen.getByLabelText(/audio file/i) as HTMLInputElement
+    Object.defineProperty(input, 'files', { value: [file] })
+    fireEvent.submit(form)
+    expect(await screen.findByText(/up to 30 minutes/i)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /explore the library/i }))
+    expect(onNavigate).toHaveBeenCalledWith('library')
+  })
+})

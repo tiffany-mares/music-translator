@@ -282,6 +282,10 @@ class HandlerTest {
         APIGatewayV2HTTPResponse res = handler()
                 .handleRequest(event("PUT", "/profile", "{\"targetLanguage\":\"xx\"}", SUB, false), null);
         assertEquals(400, res.getStatusCode());
+        // English is no longer selectable - translations already ship in it
+        assertEquals(400, handler()
+                .handleRequest(event("PUT", "/profile", "{\"targetLanguage\":\"en\"}", SUB, false), null)
+                .getStatusCode());
     }
 
     // ---- personal library (GET/PUT/DELETE /library) ----

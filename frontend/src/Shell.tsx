@@ -66,7 +66,7 @@ export default function Shell() {
           />
         </div>
         <div hidden={view !== 'upload'}>
-          <UploadPanel />
+          <UploadPanel onNavigate={setView} />
         </div>
         <div hidden={view !== 'review'}>
           {signedIn ? (

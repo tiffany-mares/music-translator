@@ -73,7 +73,7 @@ public class VocabService {
     }
 
     private static final java.util.Set<String> TARGET_LANGUAGES =
-            java.util.Set.of("en", "es", "fr", "de", "it", "pt", "ro");
+            java.util.Set.of("es", "fr", "de", "it", "pt", "ro"); // en removed: translations already ship in English
 
     /** GET /profile: the saved target language, explicit null when unset. */
     public JsonObject profile(String userId) {
