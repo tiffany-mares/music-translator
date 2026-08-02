@@ -4,7 +4,6 @@ import type { View } from '../nav/NavShell'
 import { useProfile, useSaveProfile } from './useProfile'
 
 export const TARGET_LANGUAGES: [string, string][] = [
-  ['en', 'English'],
   ['es', 'Spanish'],
   ['fr', 'French'],
   ['de', 'German'],
@@ -83,7 +82,14 @@ export default function ProfileView({ onNavigate }: { onNavigate: (view: View) =
         )}
         <p className="text-xs text-muted-foreground">
           Translations currently ship in English; your preference is saved for when more target
-          languages arrive.
+          languages arrive. Don&apos;t see yours?{' '}
+          <a
+            className="text-brass underline-offset-4 hover:underline"
+            href="mailto:tiffany.m.mares+cadenza@gmail.com?subject=Cadenza%3A%20new%20target%20language%20request"
+          >
+            Request a new language
+          </a>
+          .
         </p>
       </div>
 

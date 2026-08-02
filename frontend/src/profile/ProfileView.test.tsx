@@ -50,4 +50,15 @@ describe('ProfileView', () => {
     await userEvent.click(screen.getByRole('button', { name: /sign out/i }))
     expect(mockedAuth.signOut).toHaveBeenCalled()
   })
+
+  it('offers no English option and links a new-language request instead', async () => {
+    mockedAuth.fetchAuthSession.mockResolvedValue({} as Session)
+    renderWithProviders(<ProfileView onNavigate={vi.fn()} />)
+    const select = screen.getByLabelText(/target language/i) as HTMLSelectElement
+    const labels = [...select.options].map((o) => o.text)
+    expect(labels).not.toContain('English')
+    expect(labels).toContain('Spanish')
+    const request = screen.getByRole('link', { name: /request a new language/i })
+    expect(request).toHaveAttribute('href', expect.stringContaining('mailto:'))
+  })
 })
