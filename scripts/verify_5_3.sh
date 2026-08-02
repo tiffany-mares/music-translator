@@ -4,12 +4,13 @@
 # item without term, 400 bad quality, 401 no token.
 # Usage: AWS_REGION=... POOL_ID=... CLIENT_ID=... API=... scripts/verify_5_3.sh
 set -euo pipefail
+: "${TEST_PASSWORD:?set TEST_PASSWORD - the shared verify-user password (never hardcoded; see notes/phase7.md)}"
 : "${AWS_REGION:?}" "${POOL_ID:?}" "${CLIENT_ID:?}" "${API:?}"
 FAIL=0
 
 TOKEN=$(aws cognito-idp admin-initiate-auth --user-pool-id "$POOL_ID" --client-id "$CLIENT_ID" \
   --auth-flow ADMIN_USER_PASSWORD_AUTH \
-  --auth-parameters USERNAME=test@lyralearn.dev,PASSWORD=LyraTest2026Pass \
+  --auth-parameters USERNAME=test@lyralearn.dev,PASSWORD=$TEST_PASSWORD \
   --region "$AWS_REGION" --query AuthenticationResult.IdToken --output text)
 
 # Items must live under the REAL test user's sub - the Lambda derives the PK

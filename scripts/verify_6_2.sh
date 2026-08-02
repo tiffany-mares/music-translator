@@ -15,6 +15,7 @@
 #        WS_URL=wss://xxxx.execute-api.us-east-1.amazonaws.com/prod \
 #        scripts/verify_6_2.sh
 set -euo pipefail
+: "${TEST_PASSWORD:?set TEST_PASSWORD - the shared verify-user password (never hardcoded; see notes/phase7.md)}"
 : "${AWS_REGION:?}" "${POOL_ID:?}" "${CLIENT_ID:?}" "${API:?}" "${WS_URL:?}"
 VENV_PY=./lyralearn-env/Scripts/python.exe
 FAIL=0
@@ -26,7 +27,7 @@ LISTENER_PID=""
 
 TOKEN=$(aws cognito-idp admin-initiate-auth --user-pool-id "$POOL_ID" --client-id "$CLIENT_ID" \
   --auth-flow ADMIN_USER_PASSWORD_AUTH \
-  --auth-parameters USERNAME=test@lyralearn.dev,PASSWORD=LyraTest2026Pass \
+  --auth-parameters USERNAME=test@lyralearn.dev,PASSWORD=$TEST_PASSWORD \
   --region "$AWS_REGION" --query AuthenticationResult.IdToken --output text)
 SUB=$(aws cognito-idp admin-get-user --user-pool-id "$POOL_ID" --username test@lyralearn.dev \
   --region "$AWS_REGION" --query "UserAttributes[?Name=='sub'].Value" --output text)
