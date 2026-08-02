@@ -74,6 +74,7 @@ export default function NavShell({
             <NavButton label="Home" active={view === 'home'} onClick={() => go('home')} />
             <NavButton label="Inspiration" active={false} onClick={() => goToSection('inspiration')} />
             <NavButton label="Pipeline" active={false} onClick={() => goToSection('pipeline')} />
+            <NavButton label="FAQ" active={false} onClick={() => goToSection('faq')} />
             <NavButton label="How it works" active={view === 'how'} onClick={() => go('how')} />
             <NavButton label="Library" active={view === 'library'} onClick={() => go('library')} />
             <NavButton label="Upload" active={view === 'upload'} onClick={() => go('upload')} />
@@ -145,6 +146,7 @@ export default function NavShell({
           <NavButton label="Home" active={view === 'home'} onClick={() => go('home')} />
           <NavButton label="Inspiration" active={false} onClick={() => goToSection('inspiration')} />
           <NavButton label="Pipeline" active={false} onClick={() => goToSection('pipeline')} />
+          <NavButton label="FAQ" active={false} onClick={() => goToSection('faq')} />
           <NavButton label="How it works" active={view === 'how'} onClick={() => go('how')} />
           <NavButton label="Library" active={view === 'library'} onClick={() => go('library')} />
           <NavButton label="Upload" active={view === 'upload'} onClick={() => go('upload')} />

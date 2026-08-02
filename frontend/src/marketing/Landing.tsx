@@ -571,7 +571,7 @@ export default function Landing({ onNavigate }: { onNavigate: (view: View) => vo
       </section>
 
       {/* faq */}
-      <section className="band-dark relative z-10 border-y border-border/40">
+      <section id="faq" className="band-dark relative z-10 border-y border-border/40">
         <div className="relative z-10 mx-auto max-w-6xl px-5 py-24 sm:px-8">
           <div className="label-mono flex items-center gap-3 text-brass">
             <span className="whitespace-nowrap">[ THE QUESTIONS WORTH ASKING ]</span>
