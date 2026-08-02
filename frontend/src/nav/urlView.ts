@@ -14,6 +14,7 @@ const VIEW_PATHS: Record<View, string> = {
   stack: '/stack',
   signin: '/signin',
   signup: '/signup',
+  reset: '/reset-password',
 }
 
 const PATH_VIEWS = Object.fromEntries(

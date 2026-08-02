@@ -42,7 +42,7 @@ export default function Shell() {
 
   // Sign-in is a view, not a gate: once the session lands, leave the form.
   useEffect(() => {
-    if (signedIn && (view === 'signin' || view === 'signup')) setView('library')
+    if (signedIn && (view === 'signin' || view === 'signup' || view === 'reset')) setView('library')
   }, [signedIn, view, setView])
 
   // JobSocketProvider is a no-op when signed out (it mounts the socket only
@@ -101,7 +101,7 @@ export default function Shell() {
         {/* Auth is the one full-bleed view: a fixed overlay above the nav
             shell so the watercolor painting IS the page and the glass card
             floats on it (the Lovable auth route rendered shell-less too). */}
-        <div hidden={view !== 'signin' && view !== 'signup'}>
+        <div hidden={view !== 'signin' && view !== 'signup' && view !== 'reset'}>
           {!signedIn && (
             <div className="fixed inset-0 z-[60] overflow-y-auto">
               <button
@@ -113,7 +113,11 @@ export default function Shell() {
               </button>
               {/* key remounts the form when switching entry points so the
                   card opens in the matching mode */}
-              <AuthPage key={view} initialMode={view === 'signup' ? 'signUp' : 'signIn'} />
+              <AuthPage
+                key={view}
+                initialMode={view === 'signup' ? 'signUp' : view === 'reset' ? 'reset' : 'signIn'}
+                onNavigate={setView}
+              />
             </div>
           )}
         </div>
