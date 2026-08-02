@@ -194,7 +194,7 @@ export default function AuthPage({
   )
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-16">
+    <div className="relative flex min-h-full items-center justify-center overflow-hidden px-5 py-16">
       {/* watercolor backdrop the glass blurs against */}
       <img
         src={heroUrl}

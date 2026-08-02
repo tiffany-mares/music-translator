@@ -89,6 +89,19 @@ describe('Shell navigation (7: NavShell)', () => {
     expect(screen.getByRole('form', { name: /sign in/i })).toBeVisible()
   })
 
+  it('auth views keep the nav as a horizontal top bar', async () => {
+    mockedAuth.fetchAuthSession.mockResolvedValue({} as Session)
+    window.history.replaceState(null, '', '/signin')
+    renderWithProviders(<Shell />)
+    expect(screen.getByRole('form', { name: /sign in/i })).toBeVisible()
+    // the nav is still present alongside the auth card...
+    const nav = within(screen.getByRole('navigation', { name: 'View' }))
+    expect(nav.getByRole('button', { name: 'Library' })).toBeVisible()
+    // ...and navigating away from it works
+    await userEvent.click(nav.getByRole('button', { name: 'Upload' }))
+    expect(screen.getByLabelText(/audio file/i)).toBeVisible()
+  }, 15000)
+
   it('/signup deep link opens the auth card in sign-up mode', async () => {
     mockedAuth.fetchAuthSession.mockResolvedValue({} as Session)
     window.history.replaceState(null, '', '/signup')
