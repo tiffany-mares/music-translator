@@ -20,7 +20,11 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+
+    /* shadcn convention: @/ -> src/ (paths are baseUrl-relative to this file
+       without baseUrl, which TS 7 deprecates) */
+    "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src"]
 }

@@ -85,7 +85,10 @@ export default function SingAlongPanel() {
             <span className="singalong-hz">{pitch.hz.toFixed(1)} Hz</span>
           </div>
         ) : (
-          <p className="hint">Listening…</p>
+          <p className="hint flex items-center gap-2">
+            <span aria-hidden className="breathe inline-block h-2 w-2 rounded-full bg-sage" />
+            Listening…
+          </p>
         ))}
       <p className="hint">
         Tip: switch the track to Instrumental so the mic hears you, not the vocals.

@@ -41,7 +41,8 @@ async function fillSignIn(email: string, password: string) {
   await openAuthView()
   await userEvent.type(signInForm().getByLabelText(/email/i), email)
   await userEvent.type(signInForm().getByLabelText(/password/i, { selector: 'input' }), password)
-  await userEvent.click(signInForm().getByRole('button', { name: /sign in/i }))
+  // exact name: /sign in/i would also match 'Sign in with Google'
+  await userEvent.click(signInForm().getByRole('button', { name: 'Sign in' }))
 }
 
 async function fillSignUp(email: string, password: string) {
@@ -137,7 +138,25 @@ describe('AuthPage', () => {
     let release!: (v: SignInOutput) => void
     mocked.signIn.mockImplementation(() => new Promise((res) => (release = res)))
     await fillSignIn('new@user.dev', 'Password12345')
-    expect(signInForm().getByRole('button', { name: /sign in/i })).toBeDisabled()
+    expect(signInForm().getByRole('button', { name: 'Sign in' })).toBeDisabled()
     release(DONE)
+  })
+})
+
+// --- Google federation ------------------------------------------------------
+
+describe('Sign in with Google', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('starts the redirect flow with the Google provider', async () => {
+    mocked.fetchAuthSession.mockResolvedValue(signedOut)
+    mocked.signInWithRedirect.mockResolvedValue(undefined as never)
+    renderWithProviders(<App />)
+    await openAuthView()
+    await userEvent.click(screen.getByRole('button', { name: /sign in with google/i }))
+    expect(mocked.signInWithRedirect).toHaveBeenCalledWith({ provider: 'Google' })
   })
 })

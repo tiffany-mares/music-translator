@@ -2,11 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import {
   confirmSignUp as amplifyConfirmSignUp,
   fetchAuthSession,
+  signInWithRedirect,
   resendSignUpCode,
   signIn as amplifySignIn,
   signOut as amplifySignOut,
   signUp as amplifySignUp,
 } from 'aws-amplify/auth'
+import { Hub } from 'aws-amplify/utils'
 
 type AuthStatus = 'loading' | 'signedOut' | 'signedIn'
 type SignInResult = 'DONE' | 'CONFIRM'
@@ -19,6 +21,7 @@ interface AuthContextValue {
   confirmSignUp: (email: string, code: string) => Promise<void>
   resendCode: (email: string) => Promise<void>
   signOut: () => Promise<void>
+  signInWithGoogle: () => Promise<void>
   getIdToken: () => Promise<string>
   getOptionalIdToken: () => Promise<string | null>
 }
@@ -49,6 +52,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void refresh()
+    // OAuth redirect return: Amplify completes the code exchange async after
+    // page load and announces it on the Hub - refresh again when it lands.
+    const unsubscribe = Hub.listen('auth', ({ payload }) => {
+      if (payload.event === 'signInWithRedirect' || payload.event === 'signedIn') void refresh()
+    })
+    return unsubscribe
   }, [refresh])
 
   const signIn = useCallback(
@@ -71,6 +80,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resendCode = useCallback(async (username: string) => {
     await resendSignUpCode({ username })
+  }, [])
+
+  // Google federation: full-page redirect to the Cognito hosted UI; Amplify
+  // finishes the code exchange when the redirect returns and the Hub effect
+  // below refreshes our state.
+  const signInWithGoogle = useCallback(async () => {
+    await signInWithRedirect({ provider: 'Google' })
   }, [])
 
   const signOut = useCallback(async () => {
@@ -107,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         confirmSignUp,
         resendCode,
         signOut,
+        signInWithGoogle,
         getIdToken,
         getOptionalIdToken,
       }}

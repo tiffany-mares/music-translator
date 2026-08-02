@@ -98,7 +98,23 @@ export default function Shell() {
         <div hidden={view !== 'stack'}>
           <Stack />
         </div>
-        <div hidden={view !== 'signin'}>{!signedIn && <AuthPage />}</div>
+        {/* Auth is the one full-bleed view: a fixed overlay above the nav
+            shell so the watercolor painting IS the page and the glass card
+            floats on it (the Lovable auth route rendered shell-less too). */}
+        <div hidden={view !== 'signin'}>
+          {!signedIn && (
+            <div className="fixed inset-0 z-[60] overflow-y-auto">
+              <button
+                type="button"
+                onClick={() => setView('home')}
+                className="label-mono fixed left-5 top-5 z-[70] text-white/80 hover:text-brass"
+              >
+                ← Back
+              </button>
+              <AuthPage />
+            </div>
+          )}
+        </div>
       </NavShell>
     </JobSocketProvider>
   )

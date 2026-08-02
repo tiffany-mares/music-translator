@@ -47,6 +47,35 @@ resource "aws_cognito_user_pool_client" "web" {
     id_token      = "hours"
     refresh_token = "days"
   }
+
+  # Google federation (glass-card follow-up). The Google IdP itself is created
+  # OUT-OF-BAND (aws cognito-idp create-identity-provider) so its client
+  # secret never enters TF state - mirroring the lyralearn/mongodb pattern.
+  # supported_identity_providers therefore lists Google only after that CLI
+  # step has run (var.google_idp_enabled flips post-creation).
+  supported_identity_providers = var.google_idp_enabled ? ["COGNITO", "Google"] : ["COGNITO"]
+
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_scopes                 = ["openid", "email", "profile"]
+  callback_urls                        = [var.frontend_origin, "http://localhost:5173"]
+  logout_urls                          = [var.frontend_origin, "http://localhost:5173"]
+}
+
+variable "google_idp_enabled" {
+  type    = bool
+  default = true # flipped 2026-08-01: the Google IdP was created out-of-band via CLI
+}
+
+# Hosted-UI domain: the OAuth code flow needs one; Google's authorized
+# redirect URI is https://<this domain>/oauth2/idpresponse.
+resource "aws_cognito_user_pool_domain" "hosted" {
+  domain       = "cadenza-${var.account_id}"
+  user_pool_id = aws_cognito_user_pool.users.id
+}
+
+output "hosted_ui_domain" {
+  value = "${aws_cognito_user_pool_domain.hosted.domain}.auth.${var.region}.amazoncognito.com"
 }
 
 output "user_pool_id" { value = aws_cognito_user_pool.users.id }
