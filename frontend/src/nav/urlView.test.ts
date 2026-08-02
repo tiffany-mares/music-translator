@@ -10,6 +10,7 @@ describe('viewToPath', () => {
     expect(viewToPath('review')).toBe('/review')
     expect(viewToPath('stack')).toBe('/stack')
     expect(viewToPath('signin')).toBe('/signin')
+    expect(viewToPath('signup')).toBe('/signup')
   })
 
   it('a selected song deep-links as /song/{id}', () => {
@@ -19,7 +20,7 @@ describe('viewToPath', () => {
 
 describe('parsePath', () => {
   it('round-trips every view path', () => {
-    for (const view of ['home', 'how', 'library', 'upload', 'review', 'stack', 'signin'] as const) {
+    for (const view of ['home', 'how', 'library', 'upload', 'review', 'stack', 'signin', 'signup'] as const) {
       expect(parsePath(viewToPath(view))).toEqual({ view, songId: null })
     }
   })

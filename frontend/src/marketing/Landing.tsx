@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { ArrowRight, HelpCircle, Library, Plus } from 'lucide-react'
+import { ArrowRight, HelpCircle, Library, Plus, UserPlus } from 'lucide-react'
 import heroUrl from '../assets/cadenza-hero-watercolor.png'
 import type { View } from '../nav/NavShell'
 import { MarketingFooter } from './Footer'
@@ -407,6 +407,11 @@ export default function Landing({ onNavigate }: { onNavigate: (view: View) => vo
               icon={<HelpCircle className="relative h-4 w-4" />}
               label="How it works"
               onClick={() => onNavigate('how')}
+            />
+            <BrassCta
+              icon={<UserPlus className="relative h-4 w-4" />}
+              label="Create an account"
+              onClick={() => onNavigate('signup')}
             />
           </div>
         </div>
