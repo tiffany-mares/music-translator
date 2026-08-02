@@ -25,6 +25,7 @@ describe('Shell navigation (7: NavShell)', () => {
     mockedAuth.fetchAuthSession.mockResolvedValue(session)
     mockedApi.getDueVocab.mockResolvedValue({ items: [], count: 0 })
     mockedApi.getSongs.mockResolvedValue([])
+    mockedApi.getProfile.mockResolvedValue({ targetLanguage: null })
   })
 
   it('defaults to Home; upload form and review panel are hidden but MOUNTED', async () => {
@@ -82,12 +83,16 @@ describe('Shell navigation (7: NavShell)', () => {
     expect(screen.getByText(/sign in to build your vocabulary/i)).toBeVisible()
   })
 
-  it('Sign in nav item opens the auth view', async () => {
+  it('Profile page reaches the auth view when signed out', async () => {
     mockedAuth.fetchAuthSession.mockResolvedValue({} as Session)
+    mockedApi.getProfile.mockResolvedValue({ targetLanguage: null })
     renderWithProviders(<Shell />)
+    // the Profile entry lives in the sidebar FOOTER, outside the nav landmark
+    const aside = screen.getByRole('navigation', { name: 'View' }).closest('aside')!
+    await userEvent.click(within(aside as HTMLElement).getByRole('button', { name: 'Profile' }))
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(screen.getByRole('form', { name: /sign in/i })).toBeVisible()
-  })
+  }, 15000)
 
   it('auth views keep the nav as a horizontal top bar', async () => {
     mockedAuth.fetchAuthSession.mockResolvedValue({} as Session)

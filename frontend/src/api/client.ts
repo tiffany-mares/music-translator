@@ -7,6 +7,7 @@ import {
   type LyricsDoc,
   type ProcessOutcome,
   type QuizResponse,
+  type ProfileResponse,
   type ReviewRequest,
   type ReviewResult,
   type SongListing,
@@ -139,6 +140,26 @@ export async function getDueVocab(token: string): Promise<DueVocabResponse> {
   const body = await parseJson(res)
   if (!res.ok) throw new ApiError(res.status, body)
   return body as DueVocabResponse
+}
+
+export async function getProfile(token: string): Promise<ProfileResponse> {
+  const res = await fetch(`${BASE}/profile`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const body = await parseJson(res)
+  if (!res.ok) throw new ApiError(res.status, body)
+  return body as ProfileResponse
+}
+
+export async function putProfile(token: string, targetLanguage: string): Promise<ProfileResponse> {
+  const res = await fetch(`${BASE}/profile`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ targetLanguage }),
+  })
+  const body = await parseJson(res)
+  if (!res.ok) throw new ApiError(res.status, body)
+  return body as ProfileResponse
 }
 
 export async function getQuiz(token: string): Promise<QuizResponse> {

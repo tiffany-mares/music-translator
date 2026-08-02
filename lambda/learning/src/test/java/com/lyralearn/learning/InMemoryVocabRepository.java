@@ -62,6 +62,18 @@ class InMemoryVocabRepository implements VocabRepository {
                 next)); // gsi2sk == nextReviewAt, like the UpdateExpression
     }
 
+    private final java.util.Map<String, String> targetLanguages = new java.util.HashMap<>();
+
+    @Override
+    public java.util.Optional<String> getTargetLanguage(String userId) {
+        return java.util.Optional.ofNullable(targetLanguages.get(userId));
+    }
+
+    @Override
+    public void putTargetLanguage(String userId, String targetLanguage) {
+        targetLanguages.put(userId, targetLanguage);
+    }
+
     @Override
     public List<DueItem> queryAll(String userId) {
         List<DueItem> out = new ArrayList<>();

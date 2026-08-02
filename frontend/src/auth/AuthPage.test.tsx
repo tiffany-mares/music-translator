@@ -30,6 +30,8 @@ function renderSignedOut() {
 // Sign in nav item, and "Sign in" now names BOTH that nav item and the form's
 // submit - form interactions are scoped with within() to disambiguate.
 async function openAuthView() {
+  // Sign in moved from the nav footer to the Profile page.
+  await userEvent.click(await screen.findByRole('button', { name: 'Profile' }))
   await userEvent.click(await screen.findByRole('button', { name: 'Sign in' }))
 }
 

@@ -106,6 +106,32 @@ public class DynamoDbVocabRepository implements VocabRepository {
     }
 
     @Override
+    public Optional<String> getTargetLanguage(String userId) {
+        GetItemResponse res = ddb.getItem(GetItemRequest.builder()
+                .tableName(tableName)
+                .key(Map.of(
+                        "PK", AttributeValue.fromS("USER#" + userId),
+                        "SK", AttributeValue.fromS("PROFILE")))
+                .build());
+        if (!res.hasItem() || !res.item().containsKey("targetLanguage")) {
+            return Optional.empty();
+        }
+        return Optional.of(res.item().get("targetLanguage").s());
+    }
+
+    @Override
+    public void putTargetLanguage(String userId, String targetLanguage) {
+        ddb.updateItem(UpdateItemRequest.builder()
+                .tableName(tableName)
+                .key(Map.of(
+                        "PK", AttributeValue.fromS("USER#" + userId),
+                        "SK", AttributeValue.fromS("PROFILE")))
+                .updateExpression("SET targetLanguage = :tl")
+                .expressionAttributeValues(Map.of(":tl", AttributeValue.fromS(targetLanguage)))
+                .build());
+    }
+
+    @Override
     public List<DueItem> queryAll(String userId) {
         // Same GSI2 walk as queryDue minus the range condition: every vocab
         // item, ascending nextReviewAt (GSI2SK) - soonest review first.
