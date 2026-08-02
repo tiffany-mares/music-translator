@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import {
+  confirmResetPassword as amplifyConfirmResetPassword,
   confirmSignUp as amplifyConfirmSignUp,
   fetchAuthSession,
+  resetPassword as amplifyResetPassword,
   signInWithRedirect,
   resendSignUpCode,
   signIn as amplifySignIn,
@@ -22,6 +24,8 @@ interface AuthContextValue {
   resendCode: (email: string) => Promise<void>
   signOut: () => Promise<void>
   signInWithGoogle: () => Promise<void>
+  requestPasswordReset: (email: string) => Promise<void>
+  confirmPasswordReset: (email: string, code: string, newPassword: string) => Promise<void>
   getIdToken: () => Promise<string>
   getOptionalIdToken: () => Promise<string | null>
 }
@@ -89,6 +93,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithRedirect({ provider: 'Google' })
   }, [])
 
+  // Forgot-password: Cognito emails a code (our template wraps it in a link
+  // to /reset-password); confirm sets the new password.
+  const requestPasswordReset = useCallback(async (email: string) => {
+    await amplifyResetPassword({ username: email })
+  }, [])
+
+  const confirmPasswordReset = useCallback(
+    async (email: string, code: string, newPassword: string) => {
+      await amplifyConfirmResetPassword({
+        username: email,
+        confirmationCode: code,
+        newPassword,
+      })
+    },
+    [],
+  )
+
   const signOut = useCallback(async () => {
     await amplifySignOut()
     setEmail(null)
@@ -124,6 +145,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         resendCode,
         signOut,
         signInWithGoogle,
+        requestPasswordReset,
+        confirmPasswordReset,
         getIdToken,
         getOptionalIdToken,
       }}

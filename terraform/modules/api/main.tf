@@ -28,6 +28,15 @@ resource "aws_cognito_user_pool" "users" {
       priority = 1
     }
   }
+
+  # Forgot-password email (signup verification no longer sends mail - the
+  # pre-sign-up trigger auto-confirms - so this template is solely the reset
+  # email). Carries a LINK to the reset page with the code embedded.
+  verification_message_template {
+    default_email_option = "CONFIRM_WITH_CODE"
+    email_subject        = "Reset your Cadenza password"
+    email_message        = "Someone requested a password reset for your Cadenza account. Reset it here: ${var.frontend_origin}/reset-password?code={####} — or enter the code {####} on the reset page. If this wasn't you, ignore this email."
+  }
 }
 
 resource "aws_cognito_user_pool_client" "web" {

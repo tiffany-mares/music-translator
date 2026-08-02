@@ -178,3 +178,63 @@ describe('Sign in with Google', () => {
     expect(mocked.signInWithRedirect).toHaveBeenCalledWith({ provider: 'Google' })
   })
 })
+
+// --- Forgot / reset password -------------------------------------------------
+
+describe('forgot password flow', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    window.history.replaceState(null, '', '/')
+    sessionStorage.clear()
+    mocked.fetchAuthSession.mockResolvedValue(signedOut)
+  })
+
+  it('Forgot password? opens the request form; submitting emails a reset and moves to the reset form', async () => {
+    mocked.resetPassword.mockResolvedValue({} as Awaited<ReturnType<typeof amplifyAuth.resetPassword>>)
+    renderWithProviders(<App />)
+    await openAuthView()
+    await userEvent.click(screen.getByRole('button', { name: /forgot password/i }))
+    const forgot = screen.getByRole('form', { name: /forgot password/i })
+    await userEvent.type(within(forgot).getByLabelText(/email/i), 'lost@user.dev')
+    await userEvent.click(within(forgot).getByRole('button', { name: /email me a reset link/i }))
+    expect(mocked.resetPassword).toHaveBeenCalledWith({ username: 'lost@user.dev' })
+    expect(await screen.findByRole('form', { name: /reset password/i })).toBeInTheDocument()
+    expect(screen.getByText(/check your email/i)).toBeInTheDocument()
+    // email carried over for the confirm step
+    expect(screen.getByLabelText(/email/i, { selector: 'input' })).toHaveValue('lost@user.dev')
+  })
+
+  it('completing the reset returns to sign-in with a success banner', async () => {
+    mocked.resetPassword.mockResolvedValue({} as Awaited<ReturnType<typeof amplifyAuth.resetPassword>>)
+    mocked.confirmResetPassword.mockResolvedValue(undefined as never)
+    renderWithProviders(<App />)
+    await openAuthView()
+    await userEvent.click(screen.getByRole('button', { name: /forgot password/i }))
+    const forgot = screen.getByRole('form', { name: /forgot password/i })
+    await userEvent.type(within(forgot).getByLabelText(/email/i), 'lost@user.dev')
+    await userEvent.click(within(forgot).getByRole('button', { name: /email me a reset link/i }))
+    const reset = await screen.findByRole('form', { name: /reset password/i })
+    await userEvent.type(within(reset).getByLabelText(/reset code/i), '123456')
+    await userEvent.type(
+      within(reset).getByLabelText(/new password/i, { selector: 'input' }),
+      'FreshPass123',
+    )
+    await userEvent.click(within(reset).getByRole('button', { name: /^reset password$/i }))
+    expect(mocked.confirmResetPassword).toHaveBeenCalledWith({
+      username: 'lost@user.dev',
+      confirmationCode: '123456',
+      newPassword: 'FreshPass123',
+    })
+    // back on the sign-in card with the flash banner
+    expect(await screen.findByRole('form', { name: /sign in/i })).toBeInTheDocument()
+    expect(screen.getByText(/password reset — sign in with your new password/i)).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/signin')
+  })
+
+  it('/reset-password?code=999999 deep link opens the reset form with the code prefilled', async () => {
+    window.history.replaceState(null, '', '/reset-password?code=999999')
+    renderWithProviders(<App />)
+    const reset = await screen.findByRole('form', { name: /reset password/i })
+    expect(within(reset).getByLabelText(/reset code/i)).toHaveValue('999999')
+  })
+})

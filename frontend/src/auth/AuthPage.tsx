@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import heroUrl from '../assets/cadenza-hero-watercolor.png'
+import type { View } from '../nav/NavShell'
 import logoUrl from '../assets/cadenza-logo.png'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,7 +17,24 @@ import { useAuth } from './AuthContext'
 import { authErrorMessage } from './authErrors'
 import PasswordField from './PasswordField'
 
-type Mode = 'signIn' | 'signUp' | 'confirm'
+type Mode = 'signIn' | 'signUp' | 'confirm' | 'forgot' | 'reset'
+
+// One-shot banner that survives the keyed AuthPage remount when the Shell
+// navigates between auth views (e.g. reset success -> sign-in).
+const FLASH_KEY = 'cadenza-flash'
+// Same-device convenience: the forgot form stores the email so the reset
+// page (often opened from the email link) can prefill it.
+const RESET_EMAIL_KEY = 'cadenza-reset-email'
+
+function takeFlash(): string | null {
+  try {
+    const flash = sessionStorage.getItem(FLASH_KEY)
+    sessionStorage.removeItem(FLASH_KEY)
+    return flash
+  } catch {
+    return null
+  }
+}
 
 // Google's "G" - lucide dropped brand icons, so the official four-color mark
 // is inlined (same approach as the nav's GitHub/LinkedIn icons).
@@ -31,14 +49,29 @@ function GoogleMark({ className }: { className?: string }) {
   )
 }
 
-export default function AuthPage({ initialMode = 'signIn' }: { initialMode?: Mode } = {}) {
+export default function AuthPage({
+  initialMode = 'signIn',
+  onNavigate,
+}: { initialMode?: Mode; onNavigate?: (view: View) => void } = {}) {
   const auth = useAuth()
   const [mode, setMode] = useState<Mode>(initialMode)
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(() => {
+    if (initialMode !== 'reset') return ''
+    try {
+      return sessionStorage.getItem(RESET_EMAIL_KEY) ?? ''
+    } catch {
+      return ''
+    }
+  })
   const [password, setPassword] = useState('')
-  const [code, setCode] = useState('')
+  // The reset email links to /reset-password?code={####} - prefill from the URL.
+  const [code, setCode] = useState(() =>
+    initialMode === 'reset'
+      ? (new URLSearchParams(window.location.search).get('code') ?? '')
+      : '',
+  )
   const [error, setError] = useState<string | null>(null)
-  const [info, setInfo] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(takeFlash)
   const [pending, setPending] = useState(false)
 
   const run = async (fn: () => Promise<void>) => {
@@ -100,6 +133,41 @@ export default function AuthPage({ initialMode = 'signIn' }: { initialMode?: Mod
         setMode('signIn')
         setInfo('Account confirmed — sign in.')
       }
+    })
+  }
+
+  const handleForgot = (e: FormEvent) => {
+    e.preventDefault()
+    void run(async () => {
+      await auth.requestPasswordReset(email)
+      try {
+        sessionStorage.setItem(RESET_EMAIL_KEY, email)
+      } catch {
+        /* prefill is best-effort */
+      }
+      setMode('reset')
+      setInfo('Check your email — we sent a reset link and code.')
+    })
+  }
+
+  const handleReset = (e: FormEvent) => {
+    e.preventDefault()
+    void run(async () => {
+      await auth.confirmPasswordReset(email, code, password)
+      try {
+        sessionStorage.setItem(FLASH_KEY, 'Password reset — sign in with your new password.')
+        sessionStorage.removeItem(RESET_EMAIL_KEY)
+      } catch {
+        /* flash is best-effort */
+      }
+      setPassword('')
+      setCode('')
+      // Sync the URL/view; when we were already on /signin (forgot started
+      // from the sign-in card) the keyed remount doesn't fire, so also switch
+      // locally — takeFlash() consumes the banner either way.
+      onNavigate?.('signin')
+      setMode('signIn')
+      setInfo(takeFlash() ?? 'Password reset — sign in with your new password.')
     })
   }
 
@@ -171,6 +239,13 @@ export default function AuthPage({ initialMode = 'signIn' }: { initialMode?: Mod
                     onChange={setPassword}
                     autoComplete="current-password"
                   />
+                  <button
+                    type="button"
+                    className="label-mono -mt-2 self-end text-white/60 underline-offset-4 hover:text-brass hover:underline"
+                    onClick={() => switchMode('forgot')}
+                  >
+                    Forgot password?
+                  </button>
                   <Button type="submit" disabled={pending} className="w-full">
                     Sign in
                   </Button>
@@ -278,6 +353,110 @@ export default function AuthPage({ initialMode = 'signIn' }: { initialMode?: Mod
                   </Button>
                 </form>
               </GlassCardContent>
+            </>
+          )}
+          {mode === 'forgot' && (
+            <>
+              <GlassCardHeader>
+                <GlassCardDescription className="label-mono text-brass">
+                  [ FORGOT PASSWORD ]
+                </GlassCardDescription>
+                <GlassCardTitle className="font-content text-2xl">
+                  Let&apos;s get you back in.
+                </GlassCardTitle>
+              </GlassCardHeader>
+              <GlassCardContent>
+                {banners}
+                <form
+                  onSubmit={handleForgot}
+                  aria-label="Forgot password"
+                  className="flex flex-col gap-5"
+                >
+                  <div className="grid gap-2">
+                    <Label htmlFor="auth-email">Email</Label>
+                    <Input
+                      id="auth-email"
+                      type="email"
+                      placeholder="you@learner.music"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      autoComplete="email"
+                    />
+                  </div>
+                  <Button type="submit" disabled={pending} className="w-full">
+                    Email me a reset link
+                  </Button>
+                </form>
+              </GlassCardContent>
+              <GlassCardFooter className="justify-center border-t border-white/15 pt-5">
+                <Button variant="link" className="text-brass" onClick={() => switchMode('signIn')}>
+                  Back to sign in
+                </Button>
+              </GlassCardFooter>
+            </>
+          )}
+
+          {mode === 'reset' && (
+            <>
+              <GlassCardHeader>
+                <GlassCardDescription className="label-mono text-brass">
+                  [ RESET PASSWORD ]
+                </GlassCardDescription>
+                <GlassCardTitle className="font-content text-2xl">
+                  Choose a new password.
+                </GlassCardTitle>
+              </GlassCardHeader>
+              <GlassCardContent>
+                {banners}
+                <form
+                  onSubmit={handleReset}
+                  aria-label="Reset password"
+                  className="flex flex-col gap-5"
+                >
+                  <div className="grid gap-2">
+                    <Label htmlFor="auth-email">Email</Label>
+                    <Input
+                      id="auth-email"
+                      type="email"
+                      placeholder="you@learner.music"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      autoComplete="email"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="auth-reset-code">Reset code</Label>
+                    <Input
+                      id="auth-reset-code"
+                      inputMode="numeric"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      required
+                      autoComplete="one-time-code"
+                    />
+                  </div>
+                  <PasswordField
+                    label="New password"
+                    value={password}
+                    onChange={setPassword}
+                    autoComplete="new-password"
+                  />
+                  <p className="text-xs text-white/70">
+                    At least 8 characters, with an uppercase letter, a lowercase letter, and a
+                    number.
+                  </p>
+                  <Button type="submit" disabled={pending} className="w-full">
+                    Reset password
+                  </Button>
+                </form>
+              </GlassCardContent>
+              <GlassCardFooter className="justify-center border-t border-white/15 pt-5">
+                <Button variant="link" className="text-brass" onClick={() => switchMode('forgot')}>
+                  Need a new code?
+                </Button>
+              </GlassCardFooter>
             </>
           )}
         </GlassCard>

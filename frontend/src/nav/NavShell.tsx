@@ -21,7 +21,7 @@ function LinkedinIcon({ className }: { className?: string }) {
   )
 }
 
-export type View = 'home' | 'how' | 'library' | 'upload' | 'review' | 'stack' | 'signin' | 'signup'
+export type View = 'home' | 'how' | 'library' | 'upload' | 'review' | 'stack' | 'signin' | 'signup' | 'reset'
 
 interface NavShellProps {
   view: View
