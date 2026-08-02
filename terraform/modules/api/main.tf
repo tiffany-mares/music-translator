@@ -206,7 +206,7 @@ resource "aws_apigatewayv2_api" "http" {
   # browsers need. Origins are exact-match: no trailing slash.
   cors_configuration {
     allow_origins = [var.frontend_origin, "http://localhost:5173"]
-    allow_methods = ["GET", "POST", "PUT", "OPTIONS"] # PUT: /profile
+    allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"] # PUT/DELETE: profile + personal library
     allow_headers = ["authorization", "content-type"]
     max_age       = 3600
   }
@@ -382,6 +382,9 @@ resource "aws_apigatewayv2_route" "vocab" {
     "GET /vocab",
     "GET /profile",
     "PUT /profile",
+    "GET /library",
+    "PUT /library/{id}",
+    "DELETE /library/{id}",
   ])
   api_id             = aws_apigatewayv2_api.http.id
   route_key          = each.key

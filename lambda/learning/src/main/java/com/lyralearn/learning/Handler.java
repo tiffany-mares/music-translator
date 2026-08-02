@@ -70,6 +70,18 @@ public class Handler implements RequestHandler<APIGatewayV2HTTPEvent, APIGateway
             if ("PUT".equals(method) && "/profile".equals(path)) {
                 return json(200, service.putProfile(sub, bodyOf(event)));
             }
+            if ("GET".equals(method) && "/library".equals(path)) {
+                return json(200, service.library(sub));
+            }
+            if (path != null && path.startsWith("/library/")) {
+                String songId = path.substring("/library/".length());
+                if ("PUT".equals(method)) {
+                    return json(200, service.addToLibrary(sub, songId));
+                }
+                if ("DELETE".equals(method)) {
+                    return json(200, service.removeFromLibrary(sub, songId));
+                }
+            }
             if ("GET".equals(method) && "/vocab/quiz".equals(path)) {
                 return json(200, quizService.quiz(sub));
             }

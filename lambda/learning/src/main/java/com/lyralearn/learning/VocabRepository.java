@@ -32,6 +32,13 @@ public interface VocabRepository {
 
     void putTargetLanguage(String userId, String targetLanguage);
 
+    /** Personal library: USER#{userId}/SAVEDSONG#{songId} membership items. */
+    List<String> listSavedSongs(String userId);
+
+    void saveSong(String userId, String songId, Instant savedAt);
+
+    void removeSong(String userId, String songId);
+
     /** Every vocab item the user has, soonest next-review first (Phase 7 follow-up: the collection view). */
     List<DueItem> queryAll(String userId);
 }

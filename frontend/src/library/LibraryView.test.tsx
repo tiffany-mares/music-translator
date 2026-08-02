@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as amplifyAuth from 'aws-amplify/auth'
@@ -29,6 +29,7 @@ describe('LibraryView', () => {
     mockedApi.getLyrics.mockResolvedValue({
       songId: 's1', sourceLanguage: 'ro', targetLanguage: 'en', lines: [],
     })
+    mockedApi.getMyLibrary.mockResolvedValue({ songIds: [], count: 0 })
   })
 
   it('lists fetched songs with their language', async () => {
@@ -67,5 +68,53 @@ describe('LibraryView', () => {
     await userEvent.click(screen.getByRole('button', { name: /back to library/i }))
     expect(screen.queryByTestId('player-audio')).not.toBeInTheDocument()
     expect(screen.getByText('Dragostea')).toBeInTheDocument()
+  })
+})
+
+// --- Personal library (signed-in shelf + signed-out prompt) ------------------
+
+describe('My library section', () => {
+  const signedInSession = {
+    tokens: { idToken: { toString: () => 'tok', payload: { email: 'x@y.com' } } },
+  } as never
+
+  beforeEach(() => {
+    vi.resetAllMocks()
+    mockedApi.getAudioUrls.mockResolvedValue({ urls: { raw: 'https://s3/raw?x' }, expiresInSeconds: 900 })
+    mockedApi.getLyrics.mockResolvedValue({ songId: 's1', sourceLanguage: 'ro', targetLanguage: 'en', lines: [] })
+  })
+
+  it('signed out: shows the sign-in prompt and no bookmark buttons', async () => {
+    mockedAuth.fetchAuthSession.mockResolvedValue({} as never)
+    mockedApi.getSongs.mockResolvedValue([song('s1', 'Dragostea', 'ro')])
+    const onNavigate = vi.fn()
+    renderWithProviders(<LibraryView onNavigate={onNavigate} />)
+    await screen.findByText('Dragostea')
+    const section = screen.getByRole('region', { name: /my library/i })
+    await userEvent.click(within(section).getByRole('button', { name: 'Sign in' }))
+    expect(onNavigate).toHaveBeenCalledWith('signin')
+    expect(screen.queryByRole('button', { name: /save .* to my library/i })).not.toBeInTheDocument()
+  })
+
+  it('signed in: bookmarking a catalog song adds it to the shelf; removing takes it off', async () => {
+    mockedAuth.fetchAuthSession.mockResolvedValue(signedInSession)
+    mockedApi.getSongs.mockResolvedValue([song('s1', 'Dragostea', 'ro')])
+    mockedApi.getMyLibrary
+      .mockResolvedValueOnce({ songIds: [], count: 0 })
+      .mockResolvedValue({ songIds: ['s1'], count: 1 })
+    mockedApi.addToMyLibrary.mockResolvedValue(undefined)
+    mockedApi.removeFromMyLibrary.mockResolvedValue(undefined)
+    renderWithProviders(<LibraryView onNavigate={vi.fn()} />)
+    await screen.findByText('Dragostea')
+    expect(await screen.findByText(/no saved songs yet/i)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /save dragostea to my library/i }))
+    expect(mockedApi.addToMyLibrary).toHaveBeenCalledWith('tok', 's1')
+    // invalidation refetch returns the saved list -> shelf shows the song
+    const section = screen.getByRole('region', { name: /my library/i })
+    expect(await within(section).findByText('Dragostea')).toBeInTheDocument()
+    await userEvent.click(
+      within(section).getByRole('button', { name: /remove dragostea from my library/i }),
+    )
+    expect(mockedApi.removeFromMyLibrary).toHaveBeenCalledWith('tok', 's1')
   })
 })

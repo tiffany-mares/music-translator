@@ -1,10 +1,13 @@
 import { useState } from 'react'
-import { ArrowLeft, ListFilter, Play, Plus } from 'lucide-react'
+import { ArrowLeft, Bookmark, BookmarkCheck, ListFilter, Play, Plus } from 'lucide-react'
+import type { SongListing } from '../api/types'
 import coverUrl from '../assets/music-cover.png'
+import { useAuth } from '../auth/AuthContext'
 import type { View } from '../nav/NavShell'
 import Player from '../player/Player'
 import Vinyl from '../player/Vinyl'
 import { distinctLanguages, filterByLanguage } from './songFilters'
+import { useMyLibrary, useToggleMyLibrary } from './useMyLibrary'
 import { useSongs } from './useSongs'
 
 // The public shared library (Phase 7): every VALIDATED song, site-wide,
@@ -24,6 +27,11 @@ export default function LibraryView({
   onSelectSong?: (songId: string | null) => void
 }) {
   const { data: songs, isError, refetch } = useSongs()
+  const { status } = useAuth()
+  const signedIn = status === 'signedIn'
+  const { data: myLibrary } = useMyLibrary()
+  const toggle = useToggleMyLibrary()
+  const savedIds = new Set(myLibrary?.songIds ?? [])
   const [language, setLanguage] = useState<string | null>(null)
   const [localSelected, setLocalSelected] = useState<string | null>(null)
   const selectedId = onSelectSong ? selectedSongId : localSelected
@@ -93,7 +101,15 @@ export default function LibraryView({
         </div>
       ) : (
         <>
-          <div className="label-mono reveal flex items-center gap-3 text-brass">
+          <MyLibrarySection
+            signedIn={signedIn}
+            savedSongs={(songs ?? []).filter((song) => savedIds.has(song.songId))}
+            onOpen={(songId) => setSelected(songId)}
+            onRemove={(songId) => toggle.mutate({ songId, saved: true })}
+            onNavigate={onNavigate}
+          />
+
+          <div className="label-mono reveal mt-10 flex items-center gap-3 text-brass">
             <span className="whitespace-nowrap">[ LIBRARY ]</span>
             <span className="sweep-rule hidden flex-1 sm:block" />
             <span className="whitespace-nowrap text-muted-foreground">[ NEWEST FIRST ]</span>
@@ -129,35 +145,18 @@ export default function LibraryView({
           {list.length > 0 ? (
             <div className="mt-6 grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4">
               {list.map((song, i) => (
-                <button
+                <SongCard
                   key={song.songId}
-                  type="button"
-                  onClick={() => setSelected(song.songId)}
-                  className="reveal group block text-left"
-                  style={{ animationDelay: `${Math.min(i, 8) * 70}ms` }}
-                >
-                  <div className="corner-ticks relative aspect-square overflow-hidden rounded-[10px] border border-border bg-surface transition-all duration-500 [transition-timing-function:cubic-bezier(0.5,0,0,1)] group-hover:-translate-y-3 group-hover:scale-[1.03] group-hover:border-brass">
-                    <img
-                      src={coverUrl}
-                      alt=""
-                      loading="lazy"
-                      className="h-full w-full object-cover transition-all duration-500 group-hover:scale-105 group-hover:brightness-110"
-                    />
-                    <div className="absolute inset-0 translate-x-[-120%] bg-[linear-gradient(100deg,transparent_35%,color-mix(in_oklab,var(--foreground)_18%,transparent)_50%,transparent_65%)] transition-transform duration-700 group-hover:translate-x-[120%]" />
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-all duration-500 group-hover:opacity-100">
-                      <div className="flex h-12 w-12 scale-75 items-center justify-center rounded-full bg-ink/80 text-brass backdrop-blur-sm transition-transform duration-500 group-hover:scale-100">
-                        <Play className="h-5 w-5 fill-current" aria-hidden />
-                      </div>
-                    </div>
-                  </div>
-                  <p className="mt-3 truncate font-content text-lg leading-snug tracking-[-0.01em] transition-colors group-hover:text-brass">
-                    {song.title || 'Untitled'}
-                  </p>
-                  <p className="label-mono mt-1 truncate text-muted-foreground">
-                    {song.artist}
-                    {song.sourceLanguage ? ` · ${song.sourceLanguage}` : ''}
-                  </p>
-                </button>
+                  song={song}
+                  index={i}
+                  onOpen={() => setSelected(song.songId)}
+                  saved={savedIds.has(song.songId)}
+                  onToggleSave={
+                    signedIn
+                      ? () => toggle.mutate({ songId: song.songId, saved: savedIds.has(song.songId) })
+                      : undefined
+                  }
+                />
               ))}
             </div>
           ) : (
@@ -175,6 +174,143 @@ export default function LibraryView({
         </>
       )}
     </section>
+  )
+}
+
+function MyLibrarySection({
+  signedIn,
+  savedSongs,
+  onOpen,
+  onRemove,
+  onNavigate,
+}: {
+  signedIn: boolean
+  savedSongs: SongListing[]
+  onOpen: (songId: string) => void
+  onRemove: (songId: string) => void
+  onNavigate: (view: View) => void
+}) {
+  return (
+    <section aria-label="My library" className="mb-2">
+      <div className="label-mono reveal flex items-center gap-3 text-sage">
+        <span className="whitespace-nowrap">[ MY LIBRARY ]</span>
+        <span className="sweep-rule hidden flex-1 sm:block" />
+      </div>
+      {!signedIn ? (
+        <div className="corner-ticks plate mt-4 flex flex-col items-start gap-3 rounded-[10px] p-5">
+          <p className="text-sm text-muted-foreground">
+            Sign in to keep your own shelf of songs from the library below.
+          </p>
+          <button
+            type="button"
+            onClick={() => onNavigate('signin')}
+            className="font-button rounded-full border border-brass bg-brass px-5 py-2.5 text-ink hover:bg-brass-soft"
+          >
+            Sign in
+          </button>
+        </div>
+      ) : savedSongs.length === 0 ? (
+        <p className="mt-4 text-sm text-muted-foreground">
+          No saved songs yet — tap the bookmark on any song below to add it here.
+        </p>
+      ) : (
+        <ul className="mt-4 flex flex-col gap-2">
+          {savedSongs.map((song) => (
+            <li
+              key={song.songId}
+              className="flex items-center gap-3 rounded-[10px] border border-border bg-surface/60 px-4 py-2.5"
+            >
+              <button
+                type="button"
+                onClick={() => onOpen(song.songId)}
+                className="flex flex-1 items-center gap-3 text-left"
+              >
+                <Play className="h-4 w-4 shrink-0 text-brass" aria-hidden />
+                <span className="truncate font-content text-lg">{song.title || 'Untitled'}</span>
+                <span className="label-mono truncate text-muted-foreground">
+                  {song.artist}
+                  {song.sourceLanguage ? ` · ${song.sourceLanguage}` : ''}
+                </span>
+              </button>
+              <button
+                type="button"
+                aria-label={`Remove ${song.title || 'Untitled'} from my library`}
+                title="Remove from my library"
+                onClick={() => onRemove(song.songId)}
+                className="rounded-md p-1.5 text-muted-foreground hover:text-destructive"
+              >
+                <BookmarkCheck className="h-4 w-4" aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function SongCard({
+  song,
+  index,
+  onOpen,
+  saved,
+  onToggleSave,
+}: {
+  song: SongListing
+  index: number
+  onOpen: () => void
+  saved: boolean
+  onToggleSave?: () => void
+}) {
+  return (
+    <div
+      className="reveal group relative"
+      style={{ animationDelay: `${Math.min(index, 8) * 70}ms` }}
+    >
+      <button type="button" onClick={onOpen} className="block w-full text-left">
+        <div className="corner-ticks relative aspect-square overflow-hidden rounded-[10px] border border-border bg-surface transition-all duration-500 [transition-timing-function:cubic-bezier(0.5,0,0,1)] group-hover:-translate-y-3 group-hover:scale-[1.03] group-hover:border-brass">
+          <img
+            src={coverUrl}
+            alt=""
+            loading="lazy"
+            className="h-full w-full object-cover transition-all duration-500 group-hover:scale-105 group-hover:brightness-110"
+          />
+          <div className="absolute inset-0 translate-x-[-120%] bg-[linear-gradient(100deg,transparent_35%,color-mix(in_oklab,var(--foreground)_18%,transparent)_50%,transparent_65%)] transition-transform duration-700 group-hover:translate-x-[120%]" />
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-all duration-500 group-hover:opacity-100">
+            <div className="flex h-12 w-12 scale-75 items-center justify-center rounded-full bg-ink/80 text-brass backdrop-blur-sm transition-transform duration-500 group-hover:scale-100">
+              <Play className="h-5 w-5 fill-current" aria-hidden />
+            </div>
+          </div>
+        </div>
+        <p className="mt-3 truncate font-content text-lg leading-snug tracking-[-0.01em] transition-colors group-hover:text-brass">
+          {song.title || 'Untitled'}
+        </p>
+        <p className="label-mono mt-1 truncate text-muted-foreground">
+          {song.artist}
+          {song.sourceLanguage ? ` · ${song.sourceLanguage}` : ''}
+        </p>
+      </button>
+      {onToggleSave && (
+        <button
+          type="button"
+          aria-pressed={saved}
+          aria-label={
+            saved
+              ? `Remove ${song.title || 'Untitled'} from my library`
+              : `Save ${song.title || 'Untitled'} to my library`
+          }
+          title={saved ? 'Remove from my library' : 'Save to my library'}
+          onClick={onToggleSave}
+          className="absolute right-2 top-2 z-10 rounded-full bg-ink/80 p-2 text-ink-foreground/80 backdrop-blur-sm hover:text-brass"
+        >
+          {saved ? (
+            <BookmarkCheck className="h-4 w-4 text-brass" aria-hidden />
+          ) : (
+            <Bookmark className="h-4 w-4" aria-hidden />
+          )}
+        </button>
+      )}
+    </div>
   )
 }
 

@@ -284,6 +284,41 @@ class HandlerTest {
         assertEquals(400, res.getStatusCode());
     }
 
+    // ---- personal library (GET/PUT/DELETE /library) ----
+
+    @Test
+    void libraryAddListRemoveRoundTrip() {
+        Handler h = handler();
+        assertEquals(0, body(h.handleRequest(
+                event("GET", "/library", null, SUB, false), null)).get("count").getAsInt());
+
+        APIGatewayV2HTTPResponse add = h
+                .handleRequest(event("PUT", "/library/abc123", null, SUB, false), null);
+        assertEquals(200, add.getStatusCode());
+        assertTrue(body(add).get("saved").getAsBoolean());
+
+        JsonObject list = body(h.handleRequest(
+                event("GET", "/library", null, SUB, false), null));
+        assertEquals(1, list.get("count").getAsInt());
+        assertEquals("abc123", list.getAsJsonArray("songIds").get(0).getAsString());
+
+        APIGatewayV2HTTPResponse del = h
+                .handleRequest(event("DELETE", "/library/abc123", null, SUB, false), null);
+        assertEquals(200, del.getStatusCode());
+        assertEquals(0, body(h.handleRequest(
+                event("GET", "/library", null, SUB, false), null)).get("count").getAsInt());
+    }
+
+    @Test
+    void libraryRejectsMalformedSongIdAndMissingAuth() {
+        assertEquals(400, handler()
+                .handleRequest(event("PUT", "/library/..%2Fetc", null, SUB, false), null)
+                .getStatusCode());
+        assertEquals(401, handler()
+                .handleRequest(event("GET", "/library", null, null, false), null)
+                .getStatusCode());
+    }
+
     // ---- 5.4: songId plumbing ----
 
     @Test
