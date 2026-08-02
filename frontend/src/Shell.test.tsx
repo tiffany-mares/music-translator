@@ -89,6 +89,13 @@ describe('Shell navigation (7: NavShell)', () => {
     expect(screen.getByRole('form', { name: /sign in/i })).toBeVisible()
   })
 
+  it('/signup deep link opens the auth card in sign-up mode', async () => {
+    mockedAuth.fetchAuthSession.mockResolvedValue({} as Session)
+    window.history.replaceState(null, '', '/signup')
+    renderWithProviders(<Shell />)
+    expect(screen.getByRole('form', { name: /sign up/i })).toBeVisible()
+  })
+
   it('initializes the view from a deep-link path', async () => {
     window.history.replaceState(null, '', '/upload')
     renderWithProviders(<Shell />)

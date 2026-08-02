@@ -31,9 +31,9 @@ function GoogleMark({ className }: { className?: string }) {
   )
 }
 
-export default function AuthPage() {
+export default function AuthPage({ initialMode = 'signIn' }: { initialMode?: Mode } = {}) {
   const auth = useAuth()
-  const [mode, setMode] = useState<Mode>('signIn')
+  const [mode, setMode] = useState<Mode>(initialMode)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')

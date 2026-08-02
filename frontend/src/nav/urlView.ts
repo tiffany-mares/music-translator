@@ -13,6 +13,7 @@ const VIEW_PATHS: Record<View, string> = {
   review: '/review',
   stack: '/stack',
   signin: '/signin',
+  signup: '/signup',
 }
 
 const PATH_VIEWS = Object.fromEntries(
