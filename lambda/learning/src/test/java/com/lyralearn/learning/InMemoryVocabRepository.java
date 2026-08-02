@@ -63,6 +63,22 @@ class InMemoryVocabRepository implements VocabRepository {
     }
 
     private final java.util.Map<String, String> targetLanguages = new java.util.HashMap<>();
+    private final java.util.Map<String, java.util.TreeSet<String>> savedSongs = new java.util.HashMap<>();
+
+    @Override
+    public List<String> listSavedSongs(String userId) {
+        return new ArrayList<>(savedSongs.getOrDefault(userId, new java.util.TreeSet<>()));
+    }
+
+    @Override
+    public void saveSong(String userId, String songId, Instant savedAt) {
+        savedSongs.computeIfAbsent(userId, k -> new java.util.TreeSet<>()).add(songId);
+    }
+
+    @Override
+    public void removeSong(String userId, String songId) {
+        savedSongs.getOrDefault(userId, new java.util.TreeSet<>()).remove(songId);
+    }
 
     @Override
     public java.util.Optional<String> getTargetLanguage(String userId) {

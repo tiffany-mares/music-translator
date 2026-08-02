@@ -2,8 +2,10 @@ package com.lyralearn.learning;
 
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
+import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest;
 import software.amazon.awssdk.services.dynamodb.model.QueryResponse;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
@@ -103,6 +105,53 @@ public class DynamoDbVocabRepository implements VocabRepository {
             req.expressionAttributeNames(names);
         }
         ddb.updateItem(req.build());
+    }
+
+    private static final String SAVED_PREFIX = "SAVEDSONG#";
+
+    @Override
+    public List<String> listSavedSongs(String userId) {
+        List<String> out = new ArrayList<>();
+        Map<String, AttributeValue> start = null;
+        do {
+            QueryRequest.Builder qb = QueryRequest.builder()
+                    .tableName(tableName)
+                    .keyConditionExpression("PK = :u AND begins_with(SK, :p)")
+                    .expressionAttributeValues(Map.of(
+                            ":u", AttributeValue.fromS("USER#" + userId),
+                            ":p", AttributeValue.fromS(SAVED_PREFIX)));
+            if (start != null) {
+                qb.exclusiveStartKey(start);
+            }
+            QueryResponse res = ddb.query(qb.build());
+            for (Map<String, AttributeValue> item : res.items()) {
+                out.add(item.get("SK").s().substring(SAVED_PREFIX.length()));
+            }
+            start = res.lastEvaluatedKey() == null || res.lastEvaluatedKey().isEmpty()
+                    ? null : res.lastEvaluatedKey();
+        } while (start != null);
+        return out;
+    }
+
+    @Override
+    public void saveSong(String userId, String songId, Instant savedAt) {
+        ddb.putItem(PutItemRequest.builder()
+                .tableName(tableName)
+                .item(Map.of(
+                        "PK", AttributeValue.fromS("USER#" + userId),
+                        "SK", AttributeValue.fromS(SAVED_PREFIX + songId),
+                        "savedAt", AttributeValue.fromS(savedAt.toString())))
+                .build());
+    }
+
+    @Override
+    public void removeSong(String userId, String songId) {
+        ddb.deleteItem(DeleteItemRequest.builder()
+                .tableName(tableName)
+                .key(Map.of(
+                        "PK", AttributeValue.fromS("USER#" + userId),
+                        "SK", AttributeValue.fromS(SAVED_PREFIX + songId)))
+                .build());
     }
 
     @Override

@@ -7,6 +7,7 @@ import {
   type LyricsDoc,
   type ProcessOutcome,
   type QuizResponse,
+  type MyLibraryResponse,
   type ProfileResponse,
   type ReviewRequest,
   type ReviewResult,
@@ -140,6 +141,31 @@ export async function getDueVocab(token: string): Promise<DueVocabResponse> {
   const body = await parseJson(res)
   if (!res.ok) throw new ApiError(res.status, body)
   return body as DueVocabResponse
+}
+
+export async function getMyLibrary(token: string): Promise<MyLibraryResponse> {
+  const res = await fetch(`${BASE}/library`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const body = await parseJson(res)
+  if (!res.ok) throw new ApiError(res.status, body)
+  return body as MyLibraryResponse
+}
+
+export async function addToMyLibrary(token: string, songId: string): Promise<void> {
+  const res = await fetch(`${BASE}/library/${songId}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new ApiError(res.status, await parseJson(res))
+}
+
+export async function removeFromMyLibrary(token: string, songId: string): Promise<void> {
+  const res = await fetch(`${BASE}/library/${songId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new ApiError(res.status, await parseJson(res))
 }
 
 export async function getProfile(token: string): Promise<ProfileResponse> {

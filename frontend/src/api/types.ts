@@ -110,6 +110,12 @@ export interface QuizResponse {
   count: number
 }
 
+// Personal library membership (learning service).
+export interface MyLibraryResponse {
+  songIds: string[]
+  count: number
+}
+
 // Per-user preferences (learning service, Phase: profile-view).
 export interface ProfileResponse {
   targetLanguage: string | null

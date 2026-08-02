@@ -4,7 +4,7 @@
     {
       "Sid": "VocabItemReadWrite",
       "Effect": "Allow",
-      "Action": ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"],
+      "Action": ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query"],
       "Resource": "arn:aws:dynamodb:__REGION__:__ACCOUNT_ID__:table/LyraLearnTable"
     },
     {

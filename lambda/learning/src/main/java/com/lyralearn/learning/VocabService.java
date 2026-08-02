@@ -96,6 +96,46 @@ public class VocabService {
         return out;
     }
 
+    private static final java.util.regex.Pattern SONG_ID =
+            java.util.regex.Pattern.compile("[A-Za-z0-9-]{1,64}");
+
+    /** GET /library: the songIds the user saved. */
+    public JsonObject library(String userId) {
+        JsonArray arr = new JsonArray();
+        List<String> ids = repo.listSavedSongs(userId);
+        for (String id : ids) {
+            arr.add(id);
+        }
+        JsonObject out = new JsonObject();
+        out.add("songIds", arr);
+        out.addProperty("count", ids.size());
+        return out;
+    }
+
+    /** PUT /library/{songId}: idempotent save. */
+    public JsonObject addToLibrary(String userId, String songId) {
+        if (songId == null || !SONG_ID.matcher(songId).matches()) {
+            throw new ApiException(400, "invalid songId");
+        }
+        repo.saveSong(userId, songId, Instant.now(clock).truncatedTo(ChronoUnit.SECONDS));
+        JsonObject out = new JsonObject();
+        out.addProperty("songId", songId);
+        out.addProperty("saved", true);
+        return out;
+    }
+
+    /** DELETE /library/{songId}: idempotent remove. */
+    public JsonObject removeFromLibrary(String userId, String songId) {
+        if (songId == null || !SONG_ID.matcher(songId).matches()) {
+            throw new ApiException(400, "invalid songId");
+        }
+        repo.removeSong(userId, songId);
+        JsonObject out = new JsonObject();
+        out.addProperty("songId", songId);
+        out.addProperty("saved", false);
+        return out;
+    }
+
     /** The user's whole collection, soonest next-review first (GET /vocab). */
     public JsonObject all(String userId) {
         return itemsResponse(repo.queryAll(userId));
