@@ -52,7 +52,13 @@ describe('UploadPanel', () => {
     renderWithProviders(<UploadPanel />)
     await pickAndSubmit(audioFile(), 'My Song')
     await waitFor(() => expect(screen.getByText(/queued/i)).toBeInTheDocument())
-    expect(mockedApi.createSong).toHaveBeenCalledWith('tok', { title: 'My Song' })
+    // upload form now collects title + artist + language (empty when the test
+    // helper doesn't fill them; jsdom submit bypasses native `required`)
+    expect(mockedApi.createSong).toHaveBeenCalledWith('tok', {
+      title: 'My Song',
+      artist: '',
+      sourceLanguage: '',
+    })
     expect(mockedApi.uploadFile).toHaveBeenCalledWith('https://s3/put', expect.any(File))
     expect(mockedApi.processSong).toHaveBeenCalledWith('tok', 's1')
   })

@@ -109,7 +109,7 @@ export default function LibraryView({
             onNavigate={onNavigate}
           />
 
-          <div className="label-mono reveal mt-10 flex items-center gap-3 text-brass">
+          <div id="library-all" className="label-mono reveal mt-10 flex items-center gap-3 text-brass scroll-mt-6">
             <span className="whitespace-nowrap">[ LIBRARY ]</span>
             <span className="sweep-rule hidden flex-1 sm:block" />
             <span className="whitespace-nowrap text-muted-foreground">[ NEWEST FIRST ]</span>
@@ -191,7 +191,7 @@ function MyLibrarySection({
   onNavigate: (view: View) => void
 }) {
   return (
-    <section aria-label="My library" className="mb-2">
+    <section id="my-library" aria-label="My library" className="mb-2 scroll-mt-6">
       <div className="label-mono reveal flex items-center gap-3 text-sage">
         <span className="whitespace-nowrap">[ MY LIBRARY ]</span>
         <span className="sweep-rule hidden flex-1 sm:block" />

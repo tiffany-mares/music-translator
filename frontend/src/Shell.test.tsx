@@ -124,6 +124,16 @@ describe('Shell navigation (7: NavShell)', () => {
     expect(nav.getByRole('button', { name: 'Pipeline' })).toBeInTheDocument()
   }, 15000)
 
+  it('library nav subcategories both land on the Library view', async () => {
+    renderWithProviders(<Shell />)
+    const nav = within(screen.getByRole('navigation', { name: 'View' }))
+    await userEvent.click(nav.getByRole('button', { name: 'My library' }))
+    expect(window.location.pathname).toBe('/library')
+    await userEvent.click(nav.getByRole('button', { name: 'Library' }))
+    expect(window.location.pathname).toBe('/library')
+    expect(nav.getByRole('button', { name: 'Library' })).toHaveAttribute('aria-pressed', 'true')
+  }, 15000)
+
   it('initializes the view from a deep-link path', async () => {
     window.history.replaceState(null, '', '/upload')
     renderWithProviders(<Shell />)
@@ -135,7 +145,7 @@ describe('Shell navigation (7: NavShell)', () => {
     const nav = within(screen.getByRole('navigation', { name: 'View' }))
     await userEvent.click(nav.getByRole('button', { name: 'Upload' }))
     expect(window.location.pathname).toBe('/upload')
-    await userEvent.click(nav.getByRole('button', { name: 'Stack' }))
+    await userEvent.click(nav.getByRole('button', { name: 'Tech stack' }))
     expect(window.location.pathname).toBe('/stack')
     window.history.back()
     // jsdom fires popstate asynchronously after history.back(); the views are

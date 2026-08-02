@@ -54,12 +54,14 @@ export function useUploadFlow() {
   // User-event driven only — never called from an effect, so StrictMode's
   // double-invoked effects cannot double-create songs.
   const start = useCallback(
-    async (file: File, title?: string) => {
+    async (
+      file: File,
+      meta?: { title?: string; artist?: string; sourceLanguage?: string },
+    ) => {
       if (file.size < MIN_BYTES || file.size > MAX_BYTES) {
         setState({ step: 'rejected', reason: 'File must be between 50 KB and 25 MB.' })
         return
       }
-      const meta = title ? { title } : undefined
       try {
         setState({ step: 'creating' })
         let created = await createSong(await getOptionalIdToken(), meta)

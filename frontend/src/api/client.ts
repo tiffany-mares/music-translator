@@ -33,7 +33,7 @@ function authHeaders(token: string | null): Record<string, string> {
 
 export async function createSong(
   token: string | null,
-  meta?: { title?: string; artist?: string },
+  meta?: { title?: string; artist?: string; sourceLanguage?: string },
 ): Promise<CreateSongResponse> {
   const res = await fetch(`${BASE}/songs`, {
     method: 'POST',

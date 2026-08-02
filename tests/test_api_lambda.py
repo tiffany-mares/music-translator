@@ -386,3 +386,15 @@ def test_pre_sign_up_without_email_still_confirms():
     event = {"request": {"userAttributes": {}}, "response": {}}
     out = auto_confirm.handler(event, None)
     assert out["response"] == {"autoConfirmUser": True}
+
+
+def test_post_songs_stores_upload_form_language(monkeypatch):
+    ddb = FakeDdb()
+    put = []
+    ddb.put_item = lambda TableName, Item: put.append(Item) or {}
+    _wire(monkeypatch, ddb=ddb)
+    resp = api.handler({"routeKey": "POST /songs", "requestContext": {},
+                        "body": json.dumps({"title": "T", "artist": "A", "sourceLanguage": "ro"})}, None)
+    assert resp["statusCode"] == 201
+    assert put[0]["sourceLanguage"] == {"S": "ro"}
+    assert put[0]["artist"] == {"S": "A"}

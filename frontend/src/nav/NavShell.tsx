@@ -51,10 +51,10 @@ export default function NavShell({
     setOpen(false)
   }
 
-  // Landing-section anchors (Lovable nav parity): switch to Home, then scroll
-  // once the view is unhidden (double-rAF lets the hidden toggle paint first).
-  const goToSection = (id: string) => {
-    go('home')
+  // Section anchors: switch to the target view, then scroll once it's
+  // unhidden (double-rAF lets the hidden toggle paint first).
+  const goToSection = (id: string, targetView: View = 'home') => {
+    go(targetView)
     requestAnimationFrame(() =>
       requestAnimationFrame(() =>
         document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
@@ -83,7 +83,7 @@ export default function NavShell({
               active={view === 'review'}
               onClick={() => go('review')}
             />
-            <NavButton label="Stack" active={view === 'stack'} onClick={() => go('stack')} />
+            <NavButton label="Tech stack" active={view === 'stack'} onClick={() => go('stack')} />
             <NavButton label="Profile" active={view === 'profile'} onClick={() => go('profile')} />
           </nav>
           <ThemeToggle />
@@ -148,14 +148,26 @@ export default function NavShell({
           <NavButton label="Pipeline" active={false} onClick={() => goToSection('pipeline')} />
           <NavButton label="FAQ" active={false} onClick={() => goToSection('faq')} />
           <NavButton label="How it works" active={view === 'how'} onClick={() => go('how')} />
-          <NavButton label="Library" active={view === 'library'} onClick={() => go('library')} />
+          <p className="label-mono px-2 pb-0.5 pt-1.5 text-ink-foreground/40">Library</p>
+          <div className="flex flex-col gap-0.5 pl-3">
+            <NavButton
+              label="My library"
+              active={false}
+              onClick={() => goToSection('my-library', 'library')}
+            />
+            <NavButton
+              label="Library"
+              active={view === 'library'}
+              onClick={() => goToSection('library-all', 'library')}
+            />
+          </div>
           <NavButton label="Upload" active={view === 'upload'} onClick={() => go('upload')} />
           <NavButton
             label={dueCount > 0 ? `Review (${dueCount})` : 'Review'}
             active={view === 'review'}
             onClick={() => go('review')}
           />
-          <NavButton label="Stack" active={view === 'stack'} onClick={() => go('stack')} />
+          <NavButton label="Tech stack" active={view === 'stack'} onClick={() => go('stack')} />
 
           <span className="my-2 h-px w-full bg-border/60" />
 

@@ -1,5 +1,7 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Music, Upload } from 'lucide-react'
+import { useAuth } from '../auth/AuthContext'
+import { useToggleMyLibrary } from '../library/useMyLibrary'
 import type { View } from '../nav/NavShell'
 import Player from '../player/Player'
 import Vinyl from '../player/Vinyl'
@@ -13,19 +15,49 @@ const pillCls =
 
 // Re-skin only (Phase 7): the REAL upload flow drives everything — no
 // simulated pipeline. Every test-asserted name/copy string is unchanged.
+const SOURCE_LANGUAGES: [string, string][] = [
+  ['ro', 'Romanian'],
+  ['es', 'Spanish'],
+  ['fr', 'French'],
+  ['it', 'Italian'],
+  ['pt', 'Portuguese'],
+]
+
 export default function UploadPanel({ onNavigate }: { onNavigate?: (view: View) => void } = {}) {
   const { state, start, retryProcess, reset } = useUploadFlow()
   // Same ['job', jobId] key as JobStatusLine + Player — RQ dedupes, zero extra requests.
   const { data: polledJob } = useJobPolling(state.step === 'polling' ? state.jobId : null)
+  const { status } = useAuth()
+  const toggleLibrary = useToggleMyLibrary()
   const [title, setTitle] = useState('')
+  const [artist, setArtist] = useState('')
+  const [language, setLanguage] = useState('')
   const [fileName, setFileName] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const busy = state.step === 'creating' || state.step === 'uploading' || state.step === 'processing'
 
+  // Every upload lands in the uploader's personal library automatically
+  // (signed-in only; anonymous uploads have no shelf). Linked uploads save
+  // the CANONICAL song - that's the catalog entry. Ref-deduped: fire once per
+  // song, not on every poll re-render.
+  const savedRef = useRef<string | null>(null)
+  const librarySongId =
+    state.step === 'linked' ? state.linkedSongId : state.step === 'polling' ? state.songId : null
+  useEffect(() => {
+    if (!librarySongId || status !== 'signedIn' || savedRef.current === librarySongId) return
+    savedRef.current = librarySongId
+    toggleLibrary.mutate({ songId: librarySongId, saved: false })
+  }, [librarySongId, status, toggleLibrary])
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     const file = fileRef.current?.files?.[0]
-    if (file) void start(file, title.trim() || undefined)
+    if (file)
+      void start(file, {
+        title: title.trim(),
+        artist: artist.trim(),
+        sourceLanguage: language,
+      })
   }
 
   if (state.step === 'polling') {
@@ -36,7 +68,9 @@ export default function UploadPanel({ onNavigate }: { onNavigate?: (view: View) 
         {/* the loading centerpiece: a spinning disc while the pipeline runs */}
         {!done && (
           <div className="flex flex-col items-center gap-4 text-center">
-            <Vinyl size={160} spinning={!failed} />
+            <span className={failed ? '' : 'disc-glow'}>
+              <Vinyl size={200} spinning={!failed} fast={!failed} />
+            </span>
             <JobStatusLine jobId={state.jobId} />
             {!failed && (
               <>
@@ -48,7 +82,7 @@ export default function UploadPanel({ onNavigate }: { onNavigate?: (view: View) 
                 {onNavigate && (
                   <button
                     type="button"
-                    className={pillCls}
+                    className="font-button self-center rounded-full border border-brass/50 px-5 py-2.5 text-brass hover:bg-brass/10"
                     onClick={() => onNavigate('library')}
                   >
                     Explore the library in the meantime
@@ -121,13 +155,43 @@ export default function UploadPanel({ onNavigate }: { onNavigate?: (view: View) 
         already love <span className="text-sage">singing along</span> to works best.
       </p>
       <label className="label-mono flex max-w-md flex-col gap-1.5 text-muted-foreground">
-        Title (optional)
+        Title
         <input
           className="w-full rounded-[3px] border border-border bg-surface px-4 py-3 text-sm text-foreground outline-none focus:border-brass"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          required
           disabled={busy}
         />
+      </label>
+      <label className="label-mono flex max-w-md flex-col gap-1.5 text-muted-foreground">
+        Artist
+        <input
+          className="w-full rounded-[3px] border border-border bg-surface px-4 py-3 text-sm text-foreground outline-none focus:border-brass"
+          value={artist}
+          onChange={(e) => setArtist(e.target.value)}
+          required
+          disabled={busy}
+        />
+      </label>
+      <label className="label-mono flex max-w-md flex-col gap-1.5 text-muted-foreground">
+        Language
+        <select
+          className="label-mono w-full cursor-pointer rounded-[3px] border border-border bg-surface px-3 py-3 text-foreground outline-none focus:border-brass"
+          value={language}
+          onChange={(e) => setLanguage(e.target.value)}
+          required
+          disabled={busy}
+        >
+          <option value="" disabled>
+            Choose the song&apos;s language…
+          </option>
+          {SOURCE_LANGUAGES.map(([code, label]) => (
+            <option key={code} value={code}>
+              {label}
+            </option>
+          ))}
+        </select>
       </label>
       <label className="label-mono flex max-w-md cursor-pointer flex-col gap-1.5 text-muted-foreground">
         Audio file
