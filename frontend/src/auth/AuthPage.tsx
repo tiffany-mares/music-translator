@@ -149,6 +149,7 @@ export default function AuthPage() {
                     <Input
                       id="auth-email"
                       type="email"
+                      placeholder="you@learner.music"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
@@ -203,6 +204,7 @@ export default function AuthPage() {
                     <Input
                       id="auth-email"
                       type="email"
+                      placeholder="you@learner.music"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
@@ -211,7 +213,7 @@ export default function AuthPage() {
                   </div>
                   <PasswordField value={password} onChange={setPassword} autoComplete="new-password" />
                   <p className="text-xs text-white/70">
-                    At least 12 characters, with an uppercase letter, a lowercase letter, and a
+                    At least 8 characters, with an uppercase letter, a lowercase letter, and a
                     number.
                   </p>
                   <Button type="submit" disabled={pending} className="w-full">
