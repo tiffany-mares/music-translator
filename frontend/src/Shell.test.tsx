@@ -96,6 +96,16 @@ describe('Shell navigation (7: NavShell)', () => {
     expect(screen.getByRole('form', { name: /sign up/i })).toBeVisible()
   })
 
+  it('Inspiration and Pipeline nav items land on the home sections', async () => {
+    renderWithProviders(<Shell />)
+    const nav = within(screen.getByRole('navigation', { name: 'View' }))
+    await userEvent.click(nav.getByRole('button', { name: 'Upload' }))
+    await userEvent.click(nav.getByRole('button', { name: 'Inspiration' }))
+    // anchors switch back to the Home view (scroll itself is a browser concern)
+    expect(nav.getByRole('button', { name: 'Home' })).toHaveAttribute('aria-pressed', 'true')
+    expect(nav.getByRole('button', { name: 'Pipeline' })).toBeInTheDocument()
+  }, 15000)
+
   it('initializes the view from a deep-link path', async () => {
     window.history.replaceState(null, '', '/upload')
     renderWithProviders(<Shell />)

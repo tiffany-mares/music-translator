@@ -53,6 +53,17 @@ export default function NavShell({
     setOpen(false)
   }
 
+  // Landing-section anchors (Lovable nav parity): switch to Home, then scroll
+  // once the view is unhidden (double-rAF lets the hidden toggle paint first).
+  const goToSection = (id: string) => {
+    go('home')
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() =>
+        document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      ),
+    )
+  }
+
   return (
     <>
       {/* mobile top bar */}
@@ -104,6 +115,8 @@ export default function NavShell({
         >
           <p className="label-mono px-2 pb-2 pt-1 text-ink-foreground/40">[ NAVIGATE ]</p>
           <NavButton label="Home" active={view === 'home'} onClick={() => go('home')} />
+          <NavButton label="Inspiration" active={false} onClick={() => goToSection('inspiration')} />
+          <NavButton label="Pipeline" active={false} onClick={() => goToSection('pipeline')} />
           <NavButton label="How it works" active={view === 'how'} onClick={() => go('how')} />
           <NavButton label="Library" active={view === 'library'} onClick={() => go('library')} />
           <NavButton label="Upload" active={view === 'upload'} onClick={() => go('upload')} />
