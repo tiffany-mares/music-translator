@@ -2,12 +2,13 @@
 # Phase 3.1 done-when: issue a JWT and read/write a test item via each GSI.
 # Usage: AWS_REGION=... POOL_ID=... CLIENT_ID=... scripts/verify_3_1.sh
 set -euo pipefail
+: "${TEST_PASSWORD:?set TEST_PASSWORD - the shared verify-user password (never hardcoded; see notes/phase7.md)}"
 : "${AWS_REGION:?}" "${POOL_ID:?}" "${CLIENT_ID:?}"
 FAIL=0
 
 # --- JWT ---
 USERNAME="test@lyralearn.dev"
-PASSWORD="LyraTest2026Pass"
+PASSWORD="$TEST_PASSWORD"
 aws cognito-idp admin-create-user --user-pool-id "$POOL_ID" --username "$USERNAME" \
   --message-action SUPPRESS --region "$AWS_REGION" >/dev/null 2>&1 || true
 aws cognito-idp admin-set-user-password --user-pool-id "$POOL_ID" --username "$USERNAME" \

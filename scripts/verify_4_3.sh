@@ -6,13 +6,14 @@
 # Usage: AWS_REGION=... POOL_ID=... CLIENT_ID=... API=... AUDIO=path/to.mp3 scripts/verify_4_3.sh
 # NOTE: no MSYS_NO_PATHCONV here - it breaks Git Bash's /dev/null translation for curl.
 set -euo pipefail
+: "${TEST_PASSWORD:?set TEST_PASSWORD - the shared verify-user password (never hardcoded; see notes/phase7.md)}"
 : "${AWS_REGION:?}" "${POOL_ID:?}" "${CLIENT_ID:?}" "${API:?}"
 AUDIO="${AUDIO:-test_data/smoke/smoke_30s.mp3}"
 FAIL=0
 
 TOKEN=$(aws cognito-idp admin-initiate-auth --user-pool-id "$POOL_ID" --client-id "$CLIENT_ID" \
   --auth-flow ADMIN_USER_PASSWORD_AUTH \
-  --auth-parameters USERNAME=test@lyralearn.dev,PASSWORD=LyraTest2026Pass \
+  --auth-parameters USERNAME=test@lyralearn.dev,PASSWORD=$TEST_PASSWORD \
   --region "$AWS_REGION" --query AuthenticationResult.IdToken --output text)
 
 field() { python -c "import json,sys; print(json.load(sys.stdin).get('$1',''))"; }

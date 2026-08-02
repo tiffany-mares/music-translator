@@ -7,6 +7,7 @@
 # walkthrough recorded in notes/phase5.md 5.5 is the real gate.
 # Usage: AWS_REGION=... POOL_ID=... CLIENT_ID=... API=... scripts/verify_5_5.sh
 set -euo pipefail
+: "${TEST_PASSWORD:?set TEST_PASSWORD - the shared verify-user password (never hardcoded; see notes/phase7.md)}"
 : "${AWS_REGION:?}" "${POOL_ID:?}" "${CLIENT_ID:?}" "${API:?}"
 export PYTHONIOENCODING=utf-8
 VENV_PY=./lyralearn-env/Scripts/python.exe
@@ -15,7 +16,7 @@ FAIL=0
 
 TOKEN=$(aws cognito-idp admin-initiate-auth --user-pool-id "$POOL_ID" --client-id "$CLIENT_ID" \
   --auth-flow ADMIN_USER_PASSWORD_AUTH \
-  --auth-parameters USERNAME=test@lyralearn.dev,PASSWORD=LyraTest2026Pass \
+  --auth-parameters USERNAME=test@lyralearn.dev,PASSWORD=$TEST_PASSWORD \
   --region "$AWS_REGION" --query AuthenticationResult.IdToken --output text)
 
 SUB=$(aws cognito-idp admin-get-user --user-pool-id "$POOL_ID" --username test@lyralearn.dev \
