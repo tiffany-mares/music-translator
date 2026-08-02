@@ -30,6 +30,9 @@ interface NavShellProps {
   signedIn: boolean
   email: string | null
   onSignOut: () => void
+  /** Auth views swap the sidebar for a horizontal top bar (the painting is
+      the page there; a fixed left rail would fight the full-bleed layout). */
+  topBar?: boolean
   children: ReactNode
 }
 
@@ -44,6 +47,7 @@ export default function NavShell({
   signedIn,
   email,
   onSignOut,
+  topBar = false,
   children,
 }: NavShellProps) {
   const [open, setOpen] = useState(false)
@@ -61,6 +65,35 @@ export default function NavShell({
       requestAnimationFrame(() =>
         document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
       ),
+    )
+  }
+
+  if (topBar) {
+    return (
+      <>
+        <header className="grain-dark fixed inset-x-0 top-0 z-[70] flex h-14 items-center gap-4 border-b border-border/60 bg-ink px-4 text-ink-foreground">
+          <Brand onClick={() => go('home')} />
+          <nav
+            aria-label="View"
+            className="flex flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap"
+          >
+            <NavButton label="Home" active={view === 'home'} onClick={() => go('home')} />
+            <NavButton label="Inspiration" active={false} onClick={() => goToSection('inspiration')} />
+            <NavButton label="Pipeline" active={false} onClick={() => goToSection('pipeline')} />
+            <NavButton label="How it works" active={view === 'how'} onClick={() => go('how')} />
+            <NavButton label="Library" active={view === 'library'} onClick={() => go('library')} />
+            <NavButton label="Upload" active={view === 'upload'} onClick={() => go('upload')} />
+            <NavButton
+              label={dueCount > 0 ? `Review (${dueCount})` : 'Review'}
+              active={view === 'review'}
+              onClick={() => go('review')}
+            />
+            <NavButton label="Stack" active={view === 'stack'} onClick={() => go('stack')} />
+          </nav>
+          <ThemeToggle />
+        </header>
+        <main className="min-h-screen paper field-grid">{children}</main>
+      </>
     )
   }
 

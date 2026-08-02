@@ -39,6 +39,7 @@ export default function Shell() {
 
   const { data: due } = useDueVocab()
   const dueCount = due?.count ?? 0
+  const authView = view === 'signin' || view === 'signup' || view === 'reset'
 
   // Sign-in is a view, not a gate: once the session lands, leave the form.
   useEffect(() => {
@@ -56,6 +57,7 @@ export default function Shell() {
         signedIn={signedIn}
         email={email}
         onSignOut={() => void signOut()}
+        topBar={authView}
       >
         <div hidden={view !== 'home'}>
           <Landing onNavigate={setView} />
@@ -101,16 +103,10 @@ export default function Shell() {
         {/* Auth is the one full-bleed view: a fixed overlay above the nav
             shell so the watercolor painting IS the page and the glass card
             floats on it (the Lovable auth route rendered shell-less too). */}
-        <div hidden={view !== 'signin' && view !== 'signup' && view !== 'reset'}>
+        <div hidden={!authView}>
           {!signedIn && (
-            <div className="fixed inset-0 z-[60] overflow-y-auto">
-              <button
-                type="button"
-                onClick={() => setView('home')}
-                className="label-mono fixed left-5 top-5 z-[70] text-white/80 hover:text-brass"
-              >
-                ← Back
-              </button>
+            /* below the horizontal top bar (h-14) - the nav stays visible */
+            <div className="fixed inset-x-0 bottom-0 top-14 z-[60] overflow-y-auto">
               {/* key remounts the form when switching entry points so the
                   card opens in the matching mode */}
               <AuthPage
