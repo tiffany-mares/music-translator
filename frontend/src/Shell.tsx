@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import AuthPage from './auth/AuthPage'
 import { useAuth } from './auth/AuthContext'
 import LibraryView from './library/LibraryView'
+import ProfileView from './profile/ProfileView'
 import HowItWorks from './marketing/HowItWorks'
 import Landing from './marketing/Landing'
 import Stack from './marketing/Stack'
@@ -18,7 +19,7 @@ import { JobSocketProvider } from './ws/JobSocketContext'
 // keeps playing is the point of the loop. Phase 7: the shell renders for
 // EVERYONE (listen/upload are public); only Review and word-saving need auth.
 export default function Shell() {
-  const { status, email, signOut } = useAuth()
+  const { status } = useAuth()
   const signedIn = status === 'signedIn'
   // Deep links without a router: view state initializes from and mirrors to
   // the URL (urlView.ts); back/forward drive popstate -> state.
@@ -50,15 +51,7 @@ export default function Shell() {
   // for signed-in sessions); anonymous visitors get job status via polling.
   return (
     <JobSocketProvider>
-      <NavShell
-        view={view}
-        onNavigate={setView}
-        dueCount={dueCount}
-        signedIn={signedIn}
-        email={email}
-        onSignOut={() => void signOut()}
-        topBar={authView}
-      >
+      <NavShell view={view} onNavigate={setView} dueCount={dueCount} topBar={authView}>
         <div hidden={view !== 'home'}>
           <Landing onNavigate={setView} />
         </div>
@@ -99,6 +92,9 @@ export default function Shell() {
         </div>
         <div hidden={view !== 'stack'}>
           <Stack />
+        </div>
+        <div hidden={view !== 'profile'}>
+          <ProfileView onNavigate={setView} />
         </div>
         {/* Auth is the one full-bleed view: a fixed overlay above the nav
             shell so the watercolor painting IS the page and the glass card

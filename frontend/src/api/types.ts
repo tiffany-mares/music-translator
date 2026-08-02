@@ -110,6 +110,11 @@ export interface QuizResponse {
   count: number
 }
 
+// Per-user preferences (learning service, Phase: profile-view).
+export interface ProfileResponse {
+  targetLanguage: string | null
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly body: unknown

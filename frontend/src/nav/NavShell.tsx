@@ -21,15 +21,12 @@ function LinkedinIcon({ className }: { className?: string }) {
   )
 }
 
-export type View = 'home' | 'how' | 'library' | 'upload' | 'review' | 'stack' | 'signin' | 'signup' | 'reset'
+export type View = 'home' | 'how' | 'library' | 'upload' | 'review' | 'stack' | 'signin' | 'signup' | 'reset' | 'profile'
 
 interface NavShellProps {
   view: View
   onNavigate: (view: View) => void
   dueCount: number
-  signedIn: boolean
-  email: string | null
-  onSignOut: () => void
   /** Auth views swap the sidebar for a horizontal top bar (the painting is
       the page there; a fixed left rail would fight the full-bleed layout). */
   topBar?: boolean
@@ -44,9 +41,6 @@ export default function NavShell({
   view,
   onNavigate,
   dueCount,
-  signedIn,
-  email,
-  onSignOut,
   topBar = false,
   children,
 }: NavShellProps) {
@@ -89,6 +83,7 @@ export default function NavShell({
               onClick={() => go('review')}
             />
             <NavButton label="Stack" active={view === 'stack'} onClick={() => go('stack')} />
+            <NavButton label="Profile" active={view === 'profile'} onClick={() => go('profile')} />
           </nav>
           <ThemeToggle />
         </header>
@@ -192,30 +187,15 @@ export default function NavShell({
         </nav>
 
         <div className="relative z-10 border-t border-border/60 px-3 py-4">
-          {signedIn ? (
-            <div className="flex flex-col gap-2">
-              <span className="label-mono truncate px-2 text-ink-foreground/50">{email}</span>
-              <div className="flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={onSignOut}
-                  className="font-button rounded-md px-2 py-2 text-ink-foreground/60 transition-colors hover:bg-ink-foreground/5 hover:text-brass"
-                >
-                  Sign out
-                </button>
-                <span className="hidden lg:block">
-                  <ThemeToggle />
-                </span>
-              </div>
+          {/* sign in/out live on the Profile page now */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <NavButton label="Profile" active={view === 'profile'} onClick={() => go('profile')} />
             </div>
-          ) : (
-            <div className="flex items-center justify-between gap-3">
-              <NavButton label="Sign in" active={view === 'signin'} onClick={() => go('signin')} />
-              <span className="hidden lg:block">
-                <ThemeToggle />
-              </span>
-            </div>
-          )}
+            <span className="hidden lg:block">
+              <ThemeToggle />
+            </span>
+          </div>
         </div>
       </aside>
 

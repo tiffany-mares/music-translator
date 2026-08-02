@@ -258,6 +258,32 @@ class HandlerTest {
         assertEquals(401, res.getStatusCode());
     }
 
+    // ---- GET/PUT /profile (target language) ----
+
+    @Test
+    void profileRoundTripsTargetLanguage() {
+        APIGatewayV2HTTPResponse empty = handler()
+                .handleRequest(event("GET", "/profile", null, SUB, false), null);
+        assertEquals(200, empty.getStatusCode());
+        assertTrue(body(empty).get("targetLanguage").isJsonNull());
+
+        APIGatewayV2HTTPResponse put = handler()
+                .handleRequest(event("PUT", "/profile", "{\"targetLanguage\":\"es\"}", SUB, false), null);
+        assertEquals(200, put.getStatusCode());
+        assertEquals("es", body(put).get("targetLanguage").getAsString());
+
+        APIGatewayV2HTTPResponse got = handler()
+                .handleRequest(event("GET", "/profile", null, SUB, false), null);
+        assertEquals("es", body(got).get("targetLanguage").getAsString());
+    }
+
+    @Test
+    void putProfileRejectsUnknownLanguage() {
+        APIGatewayV2HTTPResponse res = handler()
+                .handleRequest(event("PUT", "/profile", "{\"targetLanguage\":\"xx\"}", SUB, false), null);
+        assertEquals(400, res.getStatusCode());
+    }
+
     // ---- 5.4: songId plumbing ----
 
     @Test

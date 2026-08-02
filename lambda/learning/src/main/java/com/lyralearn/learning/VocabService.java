@@ -72,6 +72,30 @@ public class VocabService {
         return out;
     }
 
+    private static final java.util.Set<String> TARGET_LANGUAGES =
+            java.util.Set.of("en", "es", "fr", "de", "it", "pt", "ro");
+
+    /** GET /profile: the saved target language, explicit null when unset. */
+    public JsonObject profile(String userId) {
+        JsonObject out = new JsonObject();
+        out.addProperty("targetLanguage", repo.getTargetLanguage(userId).orElse(null));
+        return out;
+    }
+
+    /** PUT /profile: persist the target language (whitelisted codes only). */
+    public JsonObject putProfile(String userId, String body) {
+        JsonObject req = parseObject(body);
+        String tl = req.has("targetLanguage") && !req.get("targetLanguage").isJsonNull()
+                ? req.get("targetLanguage").getAsString() : null;
+        if (tl == null || !TARGET_LANGUAGES.contains(tl)) {
+            throw new ApiException(400, "targetLanguage must be one of " + TARGET_LANGUAGES);
+        }
+        repo.putTargetLanguage(userId, tl);
+        JsonObject out = new JsonObject();
+        out.addProperty("targetLanguage", tl);
+        return out;
+    }
+
     /** The user's whole collection, soonest next-review first (GET /vocab). */
     public JsonObject all(String userId) {
         return itemsResponse(repo.queryAll(userId));

@@ -64,6 +64,12 @@ public class Handler implements RequestHandler<APIGatewayV2HTTPEvent, APIGateway
             if ("GET".equals(method) && "/vocab".equals(path)) {
                 return json(200, service.all(sub));
             }
+            if ("GET".equals(method) && "/profile".equals(path)) {
+                return json(200, service.profile(sub));
+            }
+            if ("PUT".equals(method) && "/profile".equals(path)) {
+                return json(200, service.putProfile(sub, bodyOf(event)));
+            }
             if ("GET".equals(method) && "/vocab/quiz".equals(path)) {
                 return json(200, quizService.quiz(sub));
             }
