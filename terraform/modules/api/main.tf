@@ -16,6 +16,12 @@ resource "aws_cognito_user_pool" "users" {
     require_uppercase = true
   }
 
+  # No email-verification step (user decision 2026-08-02): the pre-sign-up
+  # trigger auto-confirms every account and marks the email verified.
+  lambda_config {
+    pre_sign_up = aws_lambda_function.autoconfirm.arn
+  }
+
   account_recovery_setting {
     recovery_mechanism {
       name     = "verified_email"
@@ -76,6 +82,47 @@ resource "aws_cognito_user_pool_domain" "hosted" {
 
 output "hosted_ui_domain" {
   value = "${aws_cognito_user_pool_domain.hosted.domain}.auth.${var.region}.amazoncognito.com"
+}
+
+# ---- pre-sign-up auto-confirm trigger (no email verification) ----
+data "archive_file" "autoconfirm_lambda" {
+  type        = "zip"
+  source_file = "${path.module}/../../../lambda/auto_confirm/handler.py"
+  output_path = "${path.module}/../../../lambda/auto_confirm/autoconfirm.zip"
+}
+
+resource "aws_iam_role" "autoconfirm" {
+  name = "lyralearn-lambda-autoconfirm"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{ Effect = "Allow", Action = "sts:AssumeRole",
+    Principal = { Service = "lambda.amazonaws.com" } }]
+  })
+}
+
+resource "aws_iam_role_policy" "autoconfirm" {
+  name = "lyralearn-autoconfirm-scoped"
+  role = aws_iam_role.autoconfirm.id
+  policy = replace(replace(file("${path.module}/../../../infra/aws/lambda-autoconfirm-policy.json"),
+  "__REGION__", var.region), "__ACCOUNT_ID__", var.account_id)
+}
+
+resource "aws_lambda_function" "autoconfirm" {
+  function_name    = "lyralearn-autoconfirm"
+  role             = aws_iam_role.autoconfirm.arn
+  runtime          = "python3.12"
+  handler          = "handler.handler"
+  filename         = data.archive_file.autoconfirm_lambda.output_path
+  source_code_hash = data.archive_file.autoconfirm_lambda.output_base64sha256
+  timeout          = 5
+}
+
+resource "aws_lambda_permission" "cognito_autoconfirm" {
+  statement_id  = "AllowCognitoInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.autoconfirm.function_name
+  principal     = "cognito-idp.amazonaws.com"
+  source_arn    = aws_cognito_user_pool.users.arn
 }
 
 output "user_pool_id" { value = aws_cognito_user_pool.users.id }

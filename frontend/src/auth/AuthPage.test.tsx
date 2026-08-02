@@ -89,15 +89,28 @@ describe('AuthPage', () => {
     expect(await screen.findByRole('form', { name: /confirm/i })).toBeInTheDocument()
   })
 
-  it('signs up then shows the confirm form', async () => {
+  // Phase: no-email-verification - the pre-sign-up trigger auto-confirms, so
+  // signup signs straight in with no code screen.
+  it('signs up and signs straight in (no confirmation step)', async () => {
     renderSignedOut()
     mocked.signUp.mockResolvedValue({} as Awaited<ReturnType<typeof amplifyAuth.signUp>>)
+    mocked.signIn.mockResolvedValue(DONE)
+    mocked.fetchAuthSession.mockResolvedValue(signedIn)
     await fillSignUp('new@user.dev', 'Password12345')
     expect(mocked.signUp).toHaveBeenCalledWith({
       username: 'new@user.dev',
       password: 'Password12345',
       options: { userAttributes: { email: 'new@user.dev' } },
     })
+    expect(mocked.signIn).toHaveBeenCalledWith({ username: 'new@user.dev', password: 'Password12345' })
+    expect(await screen.findByText('new@user.dev')).toBeInTheDocument()
+  })
+
+  it('falls back to the confirm form if the pool still demands confirmation', async () => {
+    renderSignedOut()
+    mocked.signUp.mockResolvedValue({} as Awaited<ReturnType<typeof amplifyAuth.signUp>>)
+    mocked.signIn.mockRejectedValue({ name: 'UserNotConfirmedException' })
+    await fillSignUp('new@user.dev', 'Password12345')
     expect(await screen.findByRole('form', { name: /confirm/i })).toBeInTheDocument()
   })
 
@@ -108,11 +121,15 @@ describe('AuthPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('already exists')
   })
 
-  it('confirms then auto-signs-in with the retained password', async () => {
+  it('confirms then auto-signs-in with the retained password (legacy fallback path)', async () => {
     renderSignedOut()
     mocked.signUp.mockResolvedValue({} as Awaited<ReturnType<typeof amplifyAuth.signUp>>)
     mocked.confirmSignUp.mockResolvedValue({} as Awaited<ReturnType<typeof amplifyAuth.confirmSignUp>>)
-    mocked.signIn.mockResolvedValue(DONE)
+    // first sign-in attempt (post-signup) hits the unconfirmed fallback; the
+    // post-confirm one succeeds
+    mocked.signIn
+      .mockRejectedValueOnce({ name: 'UserNotConfirmedException' })
+      .mockResolvedValue(DONE)
     mocked.fetchAuthSession.mockResolvedValue(signedIn)
     await fillSignUp('new@user.dev', 'Password12345')
     await userEvent.type(await screen.findByLabelText(/code/i), '123456')
@@ -126,6 +143,7 @@ describe('AuthPage', () => {
     renderSignedOut()
     mocked.signUp.mockResolvedValue({} as Awaited<ReturnType<typeof amplifyAuth.signUp>>)
     mocked.confirmSignUp.mockRejectedValue({ name: 'CodeMismatchException' })
+    mocked.signIn.mockRejectedValue({ name: 'UserNotConfirmedException' })
     await fillSignUp('new@user.dev', 'Password12345')
     await userEvent.type(await screen.findByLabelText(/code/i), '000000')
     await userEvent.click(screen.getByRole('button', { name: /^confirm$/i }))

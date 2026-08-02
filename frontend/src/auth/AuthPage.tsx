@@ -74,7 +74,18 @@ export default function AuthPage() {
     e.preventDefault()
     void run(async () => {
       await auth.signUp(email, password)
-      setMode('confirm')
+      // The pre-sign-up trigger auto-confirms accounts, so go straight in.
+      // Legacy safety: if this pool ever demands confirmation again, fall
+      // back to the code screen instead of surfacing an error.
+      try {
+        await auth.signIn(email, password)
+      } catch (err) {
+        if ((err as { name?: string })?.name === 'UserNotConfirmedException') {
+          setMode('confirm')
+          return
+        }
+        throw err
+      }
     })
   }
 

@@ -366,3 +366,23 @@ def test_archive_sets_archived_and_is_idempotent_and_restorable():
     done, skipped = archive_mod.archive(ddb, "T", ["junk"], restore=True)
     assert (done, skipped) == (1, 0)
     assert ddb.items["junk"]["status"] == "VALIDATED"
+
+
+# --- pre-sign-up auto-confirm trigger ----------------------------------------
+
+_AC_SPEC = _ilu2.spec_from_file_location(
+    "auto_confirm", _Path2(__file__).resolve().parents[1] / "lambda" / "auto_confirm" / "handler.py")
+auto_confirm = _ilu2.module_from_spec(_AC_SPEC)
+_AC_SPEC.loader.exec_module(auto_confirm)
+
+
+def test_pre_sign_up_auto_confirms_and_verifies_email():
+    event = {"request": {"userAttributes": {"email": "x@y.dev"}}, "response": {}}
+    out = auto_confirm.handler(event, None)
+    assert out["response"] == {"autoConfirmUser": True, "autoVerifyEmail": True}
+
+
+def test_pre_sign_up_without_email_still_confirms():
+    event = {"request": {"userAttributes": {}}, "response": {}}
+    out = auto_confirm.handler(event, None)
+    assert out["response"] == {"autoConfirmUser": True}
