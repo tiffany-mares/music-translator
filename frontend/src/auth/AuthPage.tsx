@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { Disc3 } from 'lucide-react'
 import heroUrl from '../assets/cadenza-hero-watercolor.png'
+import logoUrl from '../assets/cadenza-logo.png'
 import { Button } from '@/components/ui/button'
 import {
   GlassCard,
@@ -137,9 +137,8 @@ export default function AuthPage({ initialMode = 'signIn' }: { initialMode?: Mod
       <div className="absolute inset-0 bg-ink/55" />
 
       <div className="relative z-10 flex w-full max-w-sm flex-col items-center">
-        <span className="hold-bob flex h-10 w-10 items-center justify-center rounded-[3px] bg-ink text-brass">
-          <Disc3 className="h-4 w-4" aria-hidden />
-        </span>
+        {/* same mark as the browser-tab favicon (cadenza-logo.png) */}
+        <img src={logoUrl} alt="" aria-hidden className="hold-bob h-12 w-12" />
         <h1 className="font-content mt-4 text-3xl tracking-tight text-white">cadenza</h1>
         <p className="label-mono mt-2 text-white/70">[ SONGS AS TEXTBOOKS ]</p>
 
