@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ArrowLeft, Bookmark, BookmarkCheck, ListFilter, Play, Plus } from 'lucide-react'
 import type { SongListing } from '../api/types'
 import coverUrl from '../assets/music-cover.png'
+import myLibraryCoverUrl from '../assets/disc2.jpg'
 import { useAuth } from '../auth/AuthContext'
 import type { View } from '../nav/NavShell'
 import Player from '../player/Player'
@@ -214,36 +215,20 @@ function MyLibrarySection({
           No saved songs yet — tap the bookmark on any song below to add it here.
         </p>
       ) : (
-        <ul className="mt-4 flex flex-col gap-2">
-          {savedSongs.map((song) => (
-            <li
+        /* saved songs get their own artwork: the starry disc2 jewel case */
+        <div className="mt-4 grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4">
+          {savedSongs.map((song, i) => (
+            <SongCard
               key={song.songId}
-              className="flex items-center gap-3 rounded-[10px] border border-border bg-surface/60 px-4 py-2.5"
-            >
-              <button
-                type="button"
-                onClick={() => onOpen(song.songId)}
-                className="flex flex-1 items-center gap-3 text-left"
-              >
-                <Play className="h-4 w-4 shrink-0 text-brass" aria-hidden />
-                <span className="truncate font-content text-lg">{song.title || 'Untitled'}</span>
-                <span className="label-mono truncate text-muted-foreground">
-                  {song.artist}
-                  {song.sourceLanguage ? ` · ${song.sourceLanguage}` : ''}
-                </span>
-              </button>
-              <button
-                type="button"
-                aria-label={`Remove ${song.title || 'Untitled'} from my library`}
-                title="Remove from my library"
-                onClick={() => onRemove(song.songId)}
-                className="rounded-md p-1.5 text-muted-foreground hover:text-destructive"
-              >
-                <BookmarkCheck className="h-4 w-4" aria-hidden />
-              </button>
-            </li>
+              song={song}
+              index={i}
+              cover={myLibraryCoverUrl}
+              onOpen={() => onOpen(song.songId)}
+              saved
+              onToggleSave={() => onRemove(song.songId)}
+            />
           ))}
-        </ul>
+        </div>
       )}
     </section>
   )
@@ -255,12 +240,14 @@ function SongCard({
   onOpen,
   saved,
   onToggleSave,
+  cover = coverUrl,
 }: {
   song: SongListing
   index: number
   onOpen: () => void
   saved: boolean
   onToggleSave?: () => void
+  cover?: string
 }) {
   return (
     <div
@@ -270,7 +257,7 @@ function SongCard({
       <button type="button" onClick={onOpen} className="block w-full text-left">
         <div className="corner-ticks relative aspect-square overflow-hidden rounded-[10px] border border-border bg-surface transition-all duration-500 [transition-timing-function:cubic-bezier(0.5,0,0,1)] group-hover:-translate-y-3 group-hover:scale-[1.03] group-hover:border-brass">
           <img
-            src={coverUrl}
+            src={cover}
             alt=""
             loading="lazy"
             className="h-full w-full object-cover transition-all duration-500 group-hover:scale-105 group-hover:brightness-110"
